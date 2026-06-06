@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% set active_page = "services" %}
+{% block title %}DeploySense — Services{% endblock %}
+{% block page_title %}Services{% endblock %}
+{% block page_caption %}Registered services and stability scores{% endblock %}
+
+{% block content %}
+
+<div class="page-strip">
+  <div class="page-strip-left">
+    <h2>Services</h2>
+    <p>{{ services | length }} registered service{{ 's' if services | length != 1 else '' }}</p>
+  </div>
+  <div class="page-strip-chips">
+    {% set healthy = services | selectattr('stability_score', 'ge', 80) | list | length %}
+    {% set degraded = services | length - healthy %}
+    <span class="chip chip-green">{{ healthy }} healthy</span>
+    {% if degraded > 0 %}
+    <span class="chip chip-red">{{ degraded }} degraded</span>
+    {% endif %}
+  </div>
+</div>
+
+{% if services %}
+<!-- ── Service cards ───────────────────────────────── -->
+<div class="svc-grid">
+  {% for s in services %}
+  {% set score = s.stability_score or 100 %}
+  <div class="svc-card">
+    <div class="svc-head">
+      <div>
+        <div class="svc-name">{{ s.name }}</div>
+        <div class="svc-env">{{ s.environment or 'unknown env' }}</div>
+      </div>
+      <span class="badge {% if s.status == 'ACTIVE' %}b-green{% elif s.status == 'DEGRADED' %}b-red{% else %}b-muted{% endif %}">
+        {{ s.status or 'UNKNOWN' }}
+      </span>
+    </div>
+
+    <div class="svc-meta">
+      <div class="svc-meta-item">
+        <label>Stability</label>
+        <span style="color: {% if score >= 80 %}var(--green){% elif score >= 60 %}var(--yellow){% else %}var(--red){% endif %}">
+          {{ score }}
+        </span>
+      </div>
+      <div class="svc-meta-item">
+        <label>Risk level</label>
+        <span>
+          {% if score >= 80 %}
+          <span class="badge risk-low" style="height:20px;padding:0 8px;font-size:.68rem">LOW</span>
+          {% elif score >= 60 %}
+          <span class="badge risk-moderate" style="height:20px;padding:0 8px;font-size:.68rem">MODERATE</span>
+          {% else %}
+          <span class="badge risk-high" style="height:20px;padding:0 8px;font-size:.68rem">HIGH</span>
+          {% endif %}
+        </span>
+      </div>
+    </div>
+
+    <!-- stability progress bar -->
+    <div class="meter">
+      <div class="meter-fill" style="width:{{ score }}%; background: {% if score >= 80 %}var(--green){% elif score >= 60 %}var(--yellow){% else %}var(--red){% endif %};"></div>
+    </div>
+
+    <div style="margin-top:12px; display:flex; justify-content:space-between; align-items:center;">
+      <span class="small muted">ID: <span class="mono">{{ s.id | string | truncate(8, true, '') }}…</span></span>
+      <a href="/dashboard/deployments?service={{ s.name }}" class="small" style="color:var(--accent)">Deployments →</a>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- ── Services table (quick reference) ───────────── -->
+<div class="panel">
+  <div class="panel-head">
+    <h3>All Services</h3>
+  </div>
+  <table class="tbl">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Environment</th>
+        <th>Status</th>
+        <th>Stability Score</th>
+        <th>ID</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in services %}
+      <tr>
+        <td class="bold">{{ s.name }}</td>
+        <td>
+          {% set env = s.environment or 'unknown' %}
+          <span class="badge {% if env == 'production' %}b-prod{% elif env == 'staging' %}b-staging{% else %}b-dev{% endif %}">
+            {{ env }}
+          </span>
+        </td>
+        <td>
+          <span class="badge {% if s.status == 'ACTIVE' %}b-green{% elif s.status == 'DEGRADED' %}b-red{% else %}b-muted{% endif %}">
+            {{ s.status or 'UNKNOWN' }}
+          </span>
+        </td>
+        <td>
+          {% set sc = s.stability_score or 100 %}
+          <span style="font-weight:700; color:{% if sc >= 80 %}var(--green){% elif sc >= 60 %}var(--yellow){% else %}var(--red){% endif %}">
+            {{ sc }}
+          </span>
+          <span class="muted small"> / 100</span>
+        </td>
+        <td class="mono muted small">{{ s.id | string | truncate(8, true, '') }}…</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% else %}
+<div class="empty-state" style="padding:80px 24px">
+  <div class="empty-icon">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2" y="2" width="20" height="8" rx="2"/>
+      <rect x="2" y="14" width="20" height="8" rx="2"/>
+      <circle cx="6" cy="6" r="1"/><circle cx="6" cy="18" r="1"/>
+    </svg>
+  </div>
+  <h4>No services registered</h4>
+  <p>Services are auto-discovered when deployments are created via the API.</p>
+</div>
+{% endif %}
+
+{% endblock %}

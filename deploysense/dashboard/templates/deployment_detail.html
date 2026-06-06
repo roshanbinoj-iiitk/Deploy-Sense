@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% set active_page = "deployments" %}
+{% block title %}Deployment {{ deployment.id | string | truncate(8,true,'') if deployment else 'Not Found' }} — DeploySense{% endblock %}
+{% block page_title %}Deployment Detail{% endblock %}
+{% block page_caption %}Timeline, risk, and event history{% endblock %}
+
+{% block top_actions %}
+<a href="/dashboard/deployments" class="filter-btn" style="height:32px; padding:0 14px; font-size:.8rem;">← Back</a>
+{% endblock %}
+
+{% block content %}
+
+{% if not deployment %}
+<div class="empty-state" style="padding:100px 24px">
+  <div class="empty-icon">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+    </svg>
+  </div>
+  <h4>Deployment not found</h4>
+  <p>The requested deployment ID doesn't exist or was deleted.</p>
+</div>
+
+{% else %}
+
+<!-- ── Meta cards row ──────────────────────────────── -->
+<div class="detail-meta-grid">
+  <div class="meta-card">
+    <div class="meta-card-label">Deployment ID</div>
+    <div class="meta-card-value mono" style="font-size:.78rem; word-break:break-all">{{ deployment.id }}</div>
+  </div>
+
+  <div class="meta-card">
+    <div class="meta-card-label">Environment</div>
+    <div class="meta-card-value">
+      {% set env = deployment.environment or 'unknown' %}
+      <span class="badge {% if env == 'production' %}b-prod{% elif env == 'staging' %}b-staging{% else %}b-dev{% endif %}" style="font-size:.82rem; height:26px; padding:0 12px">
+        {{ env }}
+      </span>
+    </div>
+  </div>
+
+  <div class="meta-card">
+    <div class="meta-card-label">Status</div>
+    <div class="meta-card-value">
+      {% set sl = (deployment.status or 'pending') | lower | replace(' ','_') %}
+      <span class="status-pill sp-{{ sl }}">{{ deployment.status or 'PENDING' }}</span>
+    </div>
+  </div>
+
+  <div class="meta-card">
+    <div class="meta-card-label">Risk Score</div>
+    {% if deployment.risk_score is not none %}
+    <div class="meta-card-value" style="color: {% if deployment.risk_score <= 25 %}var(--green){% elif deployment.risk_score <= 50 %}var(--yellow){% elif deployment.risk_score <= 75 %}var(--orange){% else %}var(--red){% endif %}">
+      {{ deployment.risk_score }}
+    </div>
+    <div class="meta-card-sub">{{ deployment.risk_level or '—' }} &mdash; {{ (deployment.failure_probability * 100) | round(1) if deployment.failure_probability else 0 }}% fail prob</div>
+    {% else %}
+    <div class="meta-card-value muted">—</div>
+    <div class="meta-card-sub">Not yet evaluated</div>
+    {% endif %}
+  </div>
+
+  <div class="meta-card">
+    <div class="meta-card-label">Version / SHA</div>
+    <div class="meta-card-value mono">{{ deployment.version or '—' }}</div>
+    <div class="meta-card-sub mono">{{ deployment.git_sha[:12] if deployment.git_sha else '—' }}</div>
+  </div>
+
+  <div class="meta-card">
+    <div class="meta-card-label">Deployed By</div>
+    <div class="meta-card-value">{{ deployment.deployed_by or '—' }}</div>
+    <div class="meta-card-sub">{{ deployment.created_at.strftime('%Y-%m-%d %H:%M') if deployment.created_at else '' }}</div>
+  </div>
+</div>
+
+<!-- ── Two column: timeline + risk ────────────────── -->
+<div class="two-col">
+
+  <!-- Timeline -->
+  <div class="panel">
+    <div class="panel-head"><h3>Event Timeline</h3><span class="muted small">{{ events | length }} event{{ 's' if events | length != 1 else '' }}</span></div>
+    <div style="padding: 18px 18px 8px">
+      {% if events %}
+      <div class="timeline">
+        {% for e in events %}
+        <div class="tl-event">
+          <div class="tl-time">{{ e.created_at.strftime('%H:%M:%S') if e.created_at else '' }}</div>
+          <div class="tl-event-name">{{ e.event_type }}</div>
+          <div class="tl-detail">
+            {% if e.previous_state %}<span class="muted">{{ e.previous_state }}</span> → {% endif %}
+            <span style="color:var(--accent)">{{ e.current_state or '' }}</span>
+          </div>
+          {% if e.message %}<div class="tl-detail muted" style="margin-top:2px">{{ e.message }}</div>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="empty-state" style="padding:32px 0">
+        <div class="empty-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+          </svg>
+        </div>
+        <h4>No events recorded</h4>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Risk Assessments -->
+  <div class="panel">
+    <div class="panel-head"><h3>Risk Assessments</h3><span class="muted small">{{ risks | length }}</span></div>
+    {% if risks %}
+    {% for r in risks %}
+    {% set rl = (r.risk_level or 'low') | lower %}
+    {% set ring = 'ring-green' if rl == 'low' else ('ring-yellow' if rl == 'moderate' else ('ring-orange' if rl == 'high' else 'ring-red')) %}
+    <div class="risk-item">
+      <div class="risk-score-ring {{ ring }}">{{ r.risk_score }}</div>
+      <div class="risk-info">
+        <div class="risk-info-top">
+          <span class="badge risk-{{ rl }}">{{ r.risk_level }}</span>
+          <span class="risk-prob">{{ (r.failure_probability * 100) | round(1) if r.failure_probability else 0 }}% fail prob</span>
+        </div>
+        <div class="risk-rec">{{ r.recommendation or '—' }}</div>
+        {% if r.factors %}
+        <div class="muted small" style="margin-top:5px">Factors: {{ r.factors | tojson }}</div>
+        {% endif %}
+      </div>
+      <div class="muted small nowrap">{{ r.created_at.strftime('%H:%M') if r.created_at else '—' }}</div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <div class="empty-state" style="padding:32px 0">
+      <div class="empty-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+      </div>
+      <h4>No risk assessments</h4>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+{% endif %}
+{% endblock %}

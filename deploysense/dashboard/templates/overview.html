@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% set active_page = "overview" %}
+{% block title %}DeploySense — Overview{% endblock %}
+{% block page_title %}Overview{% endblock %}
+{% block page_caption %}Platform health at a glance{% endblock %}
+
+{% block content %}
+
+<!-- ── Page header ─────────────────────────────────── -->
+<div class="page-strip">
+  <div class="page-strip-left">
+    <h2>Platform Overview</h2>
+    <p>Deployments, risk signals, and open alerts across all services.</p>
+  </div>
+  <div class="page-strip-chips">
+    <span class="chip chip-green"><span class="dot dot-green"></span>{{ stable_deployments }} stable</span>
+    {% if active_deployments > 0 %}
+    <span class="chip chip-blue">{{ active_deployments }} active</span>
+    {% endif %}
+    {% if open_alerts > 0 %}
+    <span class="chip chip-red">{{ open_alerts }} open alerts</span>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ── Stat cards ──────────────────────────────────── -->
+<div class="stat-grid">
+  <div class="stat-card">
+    <div class="stat-label">Total Deployments</div>
+    <div class="stat-value">{{ total_deployments }}</div>
+    <div class="stat-footer">All time</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Active Now</div>
+    <div class="stat-value c-blue">{{ active_deployments }}</div>
+    <div class="stat-footer">Deploying / Monitoring</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Success Rate</div>
+    <div class="stat-value {% if success_rate >= 90 %}c-green{% elif success_rate >= 70 %}c-yellow{% else %}c-red{% endif %}">{{ success_rate }}%</div>
+    <div class="stat-footer">Stable / Total</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Failed / Rolled Back</div>
+    <div class="stat-value {% if failed_deployments > 0 %}c-red{% endif %}">{{ failed_deployments }}</div>
+    <div class="stat-footer">Needs attention</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Open Alerts</div>
+    <div class="stat-value {% if open_alerts > 0 %}c-red{% endif %}">{{ open_alerts }}</div>
+    <div class="stat-footer"><a href="/dashboard/alerts">View all →</a></div>
+  </div>
+</div>
+
+<!-- ── Recent deployments ──────────────────────────── -->
+<div class="panel">
+  <div class="panel-head">
+    <h3>Recent Deployments</h3>
+    <div class="panel-actions">
+      <div class="search-box">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input type="text" id="overview-search" placeholder="Filter…" autocomplete="off">
+      </div>
+      <a href="/dashboard/deployments" class="filter-btn">View all</a>
+    </div>
+  </div>
+
+  {% if recent_deployments %}
+  <table class="tbl" id="overview-table">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Environment</th>
+        <th>Version</th>
+        <th>Status</th>
+        <th>Risk</th>
+        <th>Deployed By</th>
+        <th>Created</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for d in recent_deployments %}
+      <tr>
+        <td>
+          <a href="/dashboard/deployments/{{ d.id }}" class="mono" style="color:var(--accent)">
+            {{ d.id | string | truncate(8, true, '') }}…
+          </a>
+        </td>
+        <td>
+          {% set env = d.environment or 'unknown' %}
+          <span class="badge {% if env == 'production' %}b-prod{% elif env == 'staging' %}b-staging{% else %}b-dev{% endif %}">
+            {{ env }}
+          </span>
+        </td>
+        <td class="mono">{{ d.version or (d.git_sha[:7] if d.git_sha else '—') }}</td>
+        <td>
+          {% set sl = (d.status or 'pending') | lower | replace(' ','_') %}
+          <span class="status-pill sp-{{ sl }}">{{ d.status or 'PENDING' }}</span>
+        </td>
+        <td>
+          {% if d.risk_score is not none %}
+          {% set rl = (d.risk_level or 'low') | lower %}
+          <span class="badge risk-{{ rl }}">{{ d.risk_score }}</span>
+          {% else %}
+          <span class="muted small">—</span>
+          {% endif %}
+        </td>
+        <td>{{ d.deployed_by or '—' }}</td>
+        <td class="mono muted small">{{ d.created_at.strftime('%b %d, %H:%M') if d.created_at else '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty-state">
+    <div class="empty-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/>
+        <path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/>
+      </svg>
+    </div>
+    <h4>No deployments yet</h4>
+    <p>Register your first deployment via the API to see it here.</p>
+  </div>
+  {% endif %}
+</div>
+
+<script>
+  const inp = document.getElementById('overview-search');
+  if (inp) {
+    inp.addEventListener('input', () => {
+      const q = inp.value.toLowerCase();
+      document.querySelectorAll('#overview-table tbody tr').forEach(r => {
+        r.style.display = r.textContent.toLowerCase().includes(q) ? '' : 'none';
+      });
+    });
+  }
+</script>
+{% endblock %}

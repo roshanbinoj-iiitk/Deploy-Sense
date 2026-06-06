@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% set active_page = "alerts" %}
+{% set open_alerts = open_count %}
+{% block title %}DeploySense — Alerts{% endblock %}
+{% block page_title %}Alerts{% endblock %}
+{% block page_caption %}Deployment incidents and risk events{% endblock %}
+
+{% block content %}
+
+<div class="page-strip">
+  <div class="page-strip-left">
+    <h2>Alerts</h2>
+    <p>{{ alerts | length }} shown &mdash; {{ open_count }} open, {{ acknowledged_count }} acknowledged</p>
+  </div>
+  <div class="page-strip-chips">
+    {% if open_count > 0 %}
+    <span class="chip chip-red">{{ open_count }} open</span>
+    {% endif %}
+    {% if acknowledged_count > 0 %}
+    <span class="chip">{{ acknowledged_count }} ack'd</span>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ── Stat cards ──────────────────────────────────── -->
+<div class="stat-grid" style="grid-template-columns: repeat(auto-fit, minmax(160px,1fr))">
+  <div class="stat-card">
+    <div class="stat-label">Open</div>
+    <div class="stat-value {% if open_count > 0 %}c-red{% endif %}">{{ open_count }}</div>
+    <div class="stat-footer">Needs action</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Acknowledged</div>
+    <div class="stat-value {% if acknowledged_count > 0 %}c-yellow{% endif %}">{{ acknowledged_count }}</div>
+    <div class="stat-footer">In progress</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Shown</div>
+    <div class="stat-value">{{ alerts | length }}</div>
+    <div class="stat-footer">Last 50</div>
+  </div>
+</div>
+
+<!-- ── Filters ─────────────────────────────────────── -->
+<div class="filter-bar">
+  <a href="/dashboard/alerts"                      class="filter-btn {% if not status_filter %}active{% endif %}">All</a>
+  <a href="/dashboard/alerts?status=OPEN"          class="filter-btn {% if status_filter == 'OPEN' %}active{% endif %}">Open</a>
+  <a href="/dashboard/alerts?status=ACKNOWLEDGED"  class="filter-btn {% if status_filter == 'ACKNOWLEDGED' %}active{% endif %}">Acknowledged</a>
+  <a href="/dashboard/alerts?status=RESOLVED"      class="filter-btn {% if status_filter == 'RESOLVED' %}active{% endif %}">Resolved</a>
+</div>
+
+<!-- ── Alert list ──────────────────────────────────── -->
+<div class="panel">
+  <div class="panel-head">
+    <h3>Alert Feed</h3>
+    <div class="panel-actions">
+      <div class="search-box">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input type="text" id="alert-search" placeholder="Filter…" autocomplete="off">
+      </div>
+    </div>
+  </div>
+
+  {% if alerts %}
+  <div id="alert-list">
+    {% for a in alerts %}
+    {% set sev = a.severity or 'INFO' %}
+    {% set sev_color = 'var(--red)' if sev == 'CRITICAL' else ('var(--orange)' if sev == 'HIGH' else ('var(--yellow)' if sev == 'WARNING' else 'var(--blue)')) %}
+    <div class="alert-row">
+      <div class="alert-sev-bar" style="background: {{ sev_color }}; min-width:3px;"></div>
+      <div class="alert-body">
+        <div class="alert-title">{{ a.title or 'Alert' }}</div>
+        {% if a.description %}
+        <div class="alert-desc">{{ a.description | truncate(140) }}</div>
+        {% endif %}
+        <div style="margin-top:7px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <span class="badge {% if sev == 'CRITICAL' %}b-red{% elif sev == 'HIGH' %}b-orange{% elif sev == 'WARNING' %}b-yellow{% else %}b-blue{% endif %}">
+            {{ sev }}
+          </span>
+          <span class="badge {% if a.status == 'OPEN' %}b-red{% elif a.status == 'ACKNOWLEDGED' %}b-yellow{% else %}b-green{% endif %}">
+            {{ a.status }}
+          </span>
+        </div>
+      </div>
+      <div class="alert-meta">
+        <span class="alert-time">{{ a.triggered_at.strftime('%b %d') if a.triggered_at else '—' }}</span>
+        <span class="alert-time">{{ a.triggered_at.strftime('%H:%M') if a.triggered_at else '' }}</span>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <div class="empty-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/>
+        <line x1="12" y1="9" x2="12" y2="13"/>
+        <line x1="12" y1="17" x2="12.01" y2="17"/>
+      </svg>
+    </div>
+    <h4>No alerts</h4>
+    <p>Alerts are created automatically when deployment risk is HIGH or CRITICAL.</p>
+  </div>
+  {% endif %}
+</div>
+
+<script>
+  const inp = document.getElementById('alert-search');
+  if (inp) {
+    inp.addEventListener('input', () => {
+      const q = inp.value.toLowerCase();
+      document.querySelectorAll('#alert-list .alert-row').forEach(r => {
+        r.style.display = r.textContent.toLowerCase().includes(q) ? '' : 'none';
+      });
+    });
+  }
+</script>
+{% endblock %}

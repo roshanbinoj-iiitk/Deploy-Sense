@@ -1,0 +1,83 @@
+# DeploySense — Helm Values (Development Defaults)
+#
+# ARCHITECTURE DECISION:
+# Each service gets its own Deployment, Service, and HPA.
+# They share the same namespace and can communicate via K8s DNS:
+#   api-service.deploysense.svc.cluster.local
+#   risk-engine.deploysense.svc.cluster.local
+
+# ─── Global ──────────────────────────────────────────────────────────────────
+global:
+  namespace: deploysense
+  environment: development
+
+image:
+  registry: ghcr.io
+  repository: your-org/deploysense
+  tag: latest
+  pullPolicy: IfNotPresent
+
+# ─── API Service ─────────────────────────────────────────────────────────────
+apiService:
+  replicas: 2
+  port: 8000
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilization: 70
+
+# ─── Risk Engine ─────────────────────────────────────────────────────────────
+riskEngine:
+  replicas: 2
+  port: 8001
+  resources:
+    requests:
+      cpu: 500m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 512Mi
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 8
+    targetCPUUtilization: 70
+
+# ─── Worker Service ──────────────────────────────────────────────────────────
+workerService:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# ─── Database ────────────────────────────────────────────────────────────────
+database:
+  host: deploysense-postgres
+  port: 5432
+  name: deploysense
+  user: deploysense
+  existingSecret: deploysense-db-credentials
+
+# ─── Redis ───────────────────────────────────────────────────────────────────
+redis:
+  host: deploysense-redis
+  port: 6379
+
+# ─── Ingress ─────────────────────────────────────────────────────────────────
+ingress:
+  enabled: true
+  className: nginx
+  host: deploysense.local
+  tls: false

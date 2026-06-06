@@ -1,0 +1,45 @@
+# DeploySense — ArgoCD Application
+#
+# WHY ArgoCD (architecture/09-deployment-strategy.md):
+#   - GitOps: Desired state lives in Git, not in CI/CD scripts
+#   - Declarative: ArgoCD ensures cluster state matches Git state
+#   - Auto-sync: New commits → new image tags → ArgoCD deploys
+#   - Drift detection: ArgoCD alerts if cluster drifts from Git
+#   - Rollback: Revert Git commit → ArgoCD rolls back deployment
+#
+# FLOW:
+#   1. Developer pushes code to main
+#   2. GitHub Actions builds and pushes Docker image to GHCR
+#   3. GitHub Actions updates image tag in values.yaml
+#   4. ArgoCD detects the change and syncs
+#   5. ArgoCD deploys new images to Kubernetes
+
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: deploysense
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/your-org/deploysense.git
+    targetRevision: main
+    path: helm/deploysense
+    helm:
+      valueFiles:
+        - values.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: deploysense
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

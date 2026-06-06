@@ -1,0 +1,14 @@
+# DeploySense — Helm Chart Metadata
+#
+# WHY Helm:
+#   - Templated Kubernetes manifests (DRY across environments)
+#   - Values files per environment (dev, staging, production)
+#   - Easy rollback (helm rollback deploysense 1)
+#   - ArgoCD integrates natively with Helm
+
+apiVersion: v2
+name: deploysense
+description: Deployment Intelligence Platform
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

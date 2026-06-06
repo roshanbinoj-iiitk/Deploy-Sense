@@ -1,0 +1,25 @@
+# Grafana Dashboard Provisioning
+#
+# WHY: Auto-loads dashboards from the filesystem into Grafana.
+# When Grafana starts, it reads this config and imports all JSON
+# dashboards from the configured path.
+#
+# HOW IT WORKS:
+#   1. Grafana reads /etc/grafana/provisioning/dashboards/default.yaml
+#   2. This file points to /var/lib/grafana/dashboards/
+#   3. Grafana imports all .json files from that directory
+#   4. Updates are automatic — change JSON, restart Grafana
+
+apiVersion: 1
+
+providers:
+  - name: 'DeploySense'
+    orgId: 1
+    folder: 'DeploySense'
+    type: file
+    disableDeletion: false
+    editable: true
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

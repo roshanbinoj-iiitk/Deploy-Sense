@@ -1,0 +1,97 @@
+# DeploySense — Risk Engine Kubernetes Deployment
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: risk-engine
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: risk-engine
+    component: risk
+spec:
+  replicas: {{ .Values.riskEngine.replicas }}
+  selector:
+    matchLabels:
+      app: risk-engine
+  template:
+    metadata:
+      labels:
+        app: risk-engine
+        component: risk
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "{{ .Values.riskEngine.port }}"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+        - name: risk-engine
+          image: "{{ .Values.image.registry }}/{{ .Values.image.repository }}-risk-engine:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.riskEngine.port }}
+              protocol: TCP
+          env:
+            - name: ENVIRONMENT
+              value: {{ .Values.global.environment }}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.database.existingSecret }}
+                  key: async-url
+            - name: REDIS_URL
+              value: "redis://{{ .Values.redis.host }}:{{ .Values.redis.port }}/0"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.riskEngine.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.riskEngine.port }}
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: {{ .Values.riskEngine.resources.requests.cpu }}
+              memory: {{ .Values.riskEngine.resources.requests.memory }}
+            limits:
+              cpu: {{ .Values.riskEngine.resources.limits.cpu }}
+              memory: {{ .Values.riskEngine.resources.limits.memory }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: risk-engine
+  namespace: {{ .Values.global.namespace }}
+spec:
+  selector:
+    app: risk-engine
+  ports:
+    - port: {{ .Values.riskEngine.port }}
+      targetPort: {{ .Values.riskEngine.port }}
+      protocol: TCP
+  type: ClusterIP
+---
+{{- if .Values.riskEngine.autoscaling.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: risk-engine
+  namespace: {{ .Values.global.namespace }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: risk-engine
+  minReplicas: {{ .Values.riskEngine.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.riskEngine.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.riskEngine.autoscaling.targetCPUUtilization }}
+{{- end }}

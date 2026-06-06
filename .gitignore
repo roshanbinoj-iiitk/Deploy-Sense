@@ -1,0 +1,59 @@
+# ─── Python ──────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+*.whl
+
+# ─── Virtual Environments ────────────────────────────────────────────────────
+.venv/
+venv/
+ENV/
+
+# ─── IDE ─────────────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ─── Testing ─────────────────────────────────────────────────────────────────
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ─── Environment ─────────────────────────────────────────────────────────────
+.env
+.env.local
+.env.*.local
+
+# ─── Docker ──────────────────────────────────────────────────────────────────
+docker-compose.override.yml
+
+# ─── Terraform ───────────────────────────────────────────────────────────────
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.backup
+terraform/*.tfplan
+terraform/.terraform.lock.hcl
+
+# ─── Kubernetes ──────────────────────────────────────────────────────────────
+kubeconfig
+*.kubeconfig
+
+# ─── Alembic ─────────────────────────────────────────────────────────────────
+# Keep migration files tracked, but ignore stamps
+alembic/versions/__pycache__/
+
+# ─── Misc ────────────────────────────────────────────────────────────────────
+*.log
+*.pid
+*.seed

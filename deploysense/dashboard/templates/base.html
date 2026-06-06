@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}DeploySense{% endblock %}</title>
+  <meta name="description" content="DeploySense — Deployment Intelligence Platform. Predict risk, track releases, stay stable.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/dashboard.css">
+  {% block head %}{% endblock %}
+</head>
+<body>
+
+  <!-- ── Sidebar ─────────────────────────────────────── -->
+  <nav class="sidebar">
+    <div class="sidebar-header">
+      <div class="logo">
+        <div class="logo-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/>
+            <path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/>
+            <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/>
+            <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/>
+          </svg>
+        </div>
+        <div>
+          <span class="logo-text">DeploySense</span>
+          <span class="logo-sub">Release intelligence</span>
+        </div>
+      </div>
+    </div>
+
+    <ul class="nav-links">
+      <li>
+        <a href="/dashboard" class="nav-link {% if active_page == 'overview' %}active{% endif %}">
+          <span class="nav-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="7" rx="1"/>
+              <rect x="14" y="3" width="7" height="7" rx="1"/>
+              <rect x="3" y="14" width="7" height="7" rx="1"/>
+              <rect x="14" y="14" width="7" height="7" rx="1"/>
+            </svg>
+          </span>
+          <span>Overview</span>
+        </a>
+      </li>
+      <li>
+        <a href="/dashboard/deployments" class="nav-link {% if active_page == 'deployments' %}active{% endif %}">
+          <span class="nav-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/>
+              <path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/>
+            </svg>
+          </span>
+          <span>Deployments</span>
+        </a>
+      </li>
+      <li>
+        <a href="/dashboard/services" class="nav-link {% if active_page == 'services' %}active{% endif %}">
+          <span class="nav-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="2" width="20" height="8" rx="2"/>
+              <rect x="2" y="14" width="20" height="8" rx="2"/>
+              <circle cx="6" cy="6" r="1"/><circle cx="6" cy="18" r="1"/>
+            </svg>
+          </span>
+          <span>Services</span>
+        </a>
+      </li>
+      <li>
+        <a href="/dashboard/risk" class="nav-link {% if active_page == 'risk' %}active{% endif %}">
+          <span class="nav-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+          </span>
+          <span>Risk Analysis</span>
+        </a>
+      </li>
+      <li>
+        <a href="/dashboard/alerts" class="nav-link {% if active_page == 'alerts' %}active{% endif %}">
+          <span class="nav-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/>
+              <line x1="12" y1="9" x2="12" y2="13"/>
+              <line x1="12" y1="17" x2="12.01" y2="17"/>
+            </svg>
+          </span>
+          <span>Alerts</span>
+          {% if open_alerts is defined and open_alerts > 0 %}
+          <span class="nav-badge">{{ open_alerts }}</span>
+          {% endif %}
+        </a>
+      </li>
+    </ul>
+
+    <div class="sidebar-footer">
+      <div class="env-pill">
+        <span class="dot dot-green"></span>
+        <span>Development</span>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ── Main ────────────────────────────────────────── -->
+  <main class="main-content">
+    <header class="top-bar">
+      <div class="page-title">
+        <h1>{% block page_title %}Dashboard{% endblock %}</h1>
+        <span>{% block page_caption %}{% endblock %}</span>
+      </div>
+      <div class="top-bar-right">
+        {% block top_actions %}{% endblock %}
+        <span class="sys-status">
+          <span class="dot dot-green"></span>
+          All Systems Operational
+        </span>
+      </div>
+    </header>
+
+    <div class="content">
+      {% if database_unavailable is defined and database_unavailable %}
+      <div class="notice-banner">
+        <span class="dot dot-yellow"></span>
+        Postgres is offline — showing empty state. Start Docker to load live data.
+      </div>
+      {% endif %}
+
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+
+  {% block scripts %}{% endblock %}
+
+  <!-- WebSocket real-time updates -->
+  <script>
+  (function () {
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    let ws, attempts = 0;
+
+    function connect() {
+      ws = new WebSocket(`${proto}//${location.host}/ws/deployments`);
+
+      ws.onopen  = () => { attempts = 0; };
+      ws.onmessage = e => {
+        try { handleEvent(JSON.parse(e.data)); } catch (_) {}
+      };
+      ws.onclose = () => {
+        const delay = Math.min(1000 * 2 ** attempts++, 30000);
+        setTimeout(connect, delay);
+      };
+    }
+
+    function handleEvent(ev) {
+      toast(ev);
+      if (['deployment.created','deployment.updated','risk.updated','alert.created'].includes(ev.event)) {
+        clearTimeout(window._rt);
+        window._rt = setTimeout(() => location.reload(), 1800);
+      }
+    }
+
+    function toast(ev) {
+      const msgs = {
+        'deployment.created': `New deployment: ${ev.service || 'unknown'}`,
+        'deployment.updated': `Deployment ${ev.status || 'updated'}`,
+        'risk.updated':       `Risk score ${ev.risk_score} (${ev.risk_level})`,
+        'alert.created':      `Alert: ${ev.title || 'New alert'}`,
+        'analysis.completed': 'AI analysis complete',
+      };
+      const msg = msgs[ev.event] || ev.event;
+      const el = document.createElement('div');
+      el.className = 'toast-notification';
+      el.textContent = msg;
+      document.body.appendChild(el);
+      setTimeout(() => {
+        el.style.opacity = '0';
+        el.style.transform = 'translateY(8px)';
+        el.style.transition = 'all 0.3s ease';
+        setTimeout(() => el.remove(), 300);
+      }, 4000);
+    }
+
+    connect();
+  })();
+  </script>
+</body>
+</html>

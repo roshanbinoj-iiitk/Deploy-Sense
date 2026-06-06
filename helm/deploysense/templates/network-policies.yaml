@@ -1,0 +1,187 @@
+# DeploySense — Kubernetes Network Policies (Phase 3)
+#
+# WHY: Zero-trust networking. By default, pods can talk to everything.
+# Network policies restrict which pods can communicate with each other.
+#
+# ARCHITECTURE:
+#   API Service → can reach: PostgreSQL, Redis, Risk Engine
+#   Risk Engine → can reach: PostgreSQL, Redis
+#   Worker      → can reach: PostgreSQL, Redis, GitHub API (egress)
+#   Dashboard   → served by API Service (same pod)
+#
+# TRADEOFF:
+#   Kubernetes NetworkPolicy requires a CNI plugin that supports it
+#   (Calico, Cilium, Weave). The default kubenet does NOT.
+#   We use Calico as the reference CNI.
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deploysense-api-policy
+  namespace: deploysense
+spec:
+  podSelector:
+    matchLabels:
+      app: deploysense-api
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow traffic from Ingress controller
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 8000
+    # Allow Prometheus scraping
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: monitoring
+      ports:
+        - protocol: TCP
+          port: 8000
+  egress:
+    # PostgreSQL
+    - to:
+        - podSelector:
+            matchLabels:
+              app: postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+    # Redis
+    - to:
+        - podSelector:
+            matchLabels:
+              app: redis
+      ports:
+        - protocol: TCP
+          port: 6379
+    # Risk Engine
+    - to:
+        - podSelector:
+            matchLabels:
+              app: deploysense-risk-engine
+      ports:
+        - protocol: TCP
+          port: 8001
+    # DNS resolution
+    - to: []
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # GitHub API + LLM API (external HTTPS)
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 443
+
+---
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deploysense-risk-engine-policy
+  namespace: deploysense
+spec:
+  podSelector:
+    matchLabels:
+      app: deploysense-risk-engine
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Only API service can reach risk engine
+    - from:
+        - podSelector:
+            matchLabels:
+              app: deploysense-api
+      ports:
+        - protocol: TCP
+          port: 8001
+  egress:
+    # PostgreSQL
+    - to:
+        - podSelector:
+            matchLabels:
+              app: postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+    # Redis
+    - to:
+        - podSelector:
+            matchLabels:
+              app: redis
+      ports:
+        - protocol: TCP
+          port: 6379
+    # DNS
+    - to: []
+      ports:
+        - protocol: UDP
+          port: 53
+
+---
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deploysense-worker-policy
+  namespace: deploysense
+spec:
+  podSelector:
+    matchLabels:
+      app: deploysense-worker
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []  # Worker has no inbound traffic
+  egress:
+    # PostgreSQL
+    - to:
+        - podSelector:
+            matchLabels:
+              app: postgres
+      ports:
+        - protocol: TCP
+          port: 5432
+    # Redis
+    - to:
+        - podSelector:
+            matchLabels:
+              app: redis
+      ports:
+        - protocol: TCP
+          port: 6379
+    # DNS
+    - to: []
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # GitHub API (external HTTPS)
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 443
+
+---
+
+# Default deny — block all traffic not explicitly allowed
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: deploysense
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress

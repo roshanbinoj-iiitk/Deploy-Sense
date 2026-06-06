@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+{% set active_page = "risk" %}
+{% block title %}DeploySense — Risk Analysis{% endblock %}
+{% block page_title %}Risk Analysis{% endblock %}
+{% block page_caption %}Deployment risk distribution and failure probability{% endblock %}
+
+{% block content %}
+
+<div class="page-strip">
+  <div class="page-strip-left">
+    <h2>Risk Analysis</h2>
+    <p>{{ recent_risks | length }} evaluations &mdash; avg score {{ avg_score }}</p>
+  </div>
+  <div class="page-strip-chips">
+    {% set hi = distribution.get('HIGH', 0) + distribution.get('CRITICAL', 0) %}
+    {% if hi > 0 %}
+    <span class="chip chip-red">{{ hi }} high/critical</span>
+    {% endif %}
+    <span class="chip chip-green">{{ distribution.get('LOW', 0) }} low risk</span>
+  </div>
+</div>
+
+<!-- ── Stat cards ──────────────────────────────────── -->
+<div class="stat-grid">
+  <div class="stat-card">
+    <div class="stat-label">Avg Risk Score</div>
+    <div class="stat-value {% if avg_score <= 25 %}c-green{% elif avg_score <= 50 %}c-yellow{% else %}c-red{% endif %}">{{ avg_score }}</div>
+    <div class="stat-footer">Last 50 assessments</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Total Evaluations</div>
+    <div class="stat-value">{{ recent_risks | length }}</div>
+    <div class="stat-footer">All recorded</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">High / Critical</div>
+    <div class="stat-value c-red">{{ distribution.get('HIGH', 0) + distribution.get('CRITICAL', 0) }}</div>
+    <div class="stat-footer">Needs review</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Low Risk</div>
+    <div class="stat-value c-green">{{ distribution.get('LOW', 0) }}</div>
+    <div class="stat-footer">Safe to deploy</div>
+  </div>
+</div>
+
+<!-- ── Distribution chart ──────────────────────────── -->
+<div class="panel">
+  <div class="panel-head"><h3>Risk Level Distribution</h3></div>
+  {% set total_evals = recent_risks | length %}
+  {% if total_evals > 0 %}
+  <div style="display:flex; gap:32px; align-items:center; padding:20px 18px; flex-wrap:wrap;">
+
+    <!-- Donut via canvas -->
+    <canvas id="donut" width="140" height="140" style="flex-shrink:0"></canvas>
+
+    <div style="flex:1; min-width:220px;">
+      {% set low_n  = distribution.get('LOW', 0) %}
+      {% set mod_n  = distribution.get('MODERATE', 0) %}
+      {% set high_n = distribution.get('HIGH', 0) %}
+      {% set crit_n = distribution.get('CRITICAL', 0) %}
+      {% set low_p  = (low_n  / total_evals * 100) | round(1) %}
+      {% set mod_p  = (mod_n  / total_evals * 100) | round(1) %}
+      {% set high_p = (high_n / total_evals * 100) | round(1) %}
+      {% set crit_p = (crit_n / total_evals * 100) | round(1) %}
+
+      <!-- stacked bar -->
+      <div class="dist-bar">
+        {% if low_p  > 0 %}<div class="dist-seg" style="width:{{ low_p }}%;  background:var(--green);">{% if low_p > 7 %}{{ low_p | int }}%{% endif %}</div>{% endif %}
+        {% if mod_p  > 0 %}<div class="dist-seg" style="width:{{ mod_p }}%;  background:var(--yellow);">{% if mod_p > 7 %}{{ mod_p | int }}%{% endif %}</div>{% endif %}
+        {% if high_p > 0 %}<div class="dist-seg" style="width:{{ high_p }}%; background:var(--orange);">{% if high_p > 7 %}{{ high_p | int }}%{% endif %}</div>{% endif %}
+        {% if crit_p > 0 %}<div class="dist-seg" style="width:{{ crit_p }}%; background:var(--red);">{% if crit_p > 7 %}{{ crit_p | int }}%{% endif %}</div>{% endif %}
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px 24px; margin-top:14px;">
+        <div class="chart-label"><span class="chart-dot" style="background:var(--green)"></span>  Low &mdash; {{ low_n }}</div>
+        <div class="chart-label"><span class="chart-dot" style="background:var(--yellow)"></span> Moderate &mdash; {{ mod_n }}</div>
+        <div class="chart-label"><span class="chart-dot" style="background:var(--orange)"></span> High &mdash; {{ high_n }}</div>
+        <div class="chart-label"><span class="chart-dot" style="background:var(--red)"></span>    Critical &mdash; {{ crit_n }}</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  (function() {
+    const canvas = document.getElementById('donut');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const data = [
+      { v: {{ low_n  }}, color: '#30c980' },
+      { v: {{ mod_n  }}, color: '#f0b429' },
+      { v: {{ high_n }}, color: '#f87c35' },
+      { v: {{ crit_n }}, color: '#e85151' },
+    ];
+    const total = data.reduce((s, d) => s + d.v, 0);
+    if (!total) return;
+    const cx = 70, cy = 70, r = 58, hole = 36;
+    let angle = -Math.PI / 2;
+    data.forEach(d => {
+      if (!d.v) return;
+      const slice = (d.v / total) * 2 * Math.PI;
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.arc(cx, cy, r, angle, angle + slice);
+      ctx.closePath();
+      ctx.fillStyle = d.color;
+      ctx.fill();
+      angle += slice;
+    });
+    // hole
+    ctx.beginPath();
+    ctx.arc(cx, cy, hole, 0, 2 * Math.PI);
+    ctx.fillStyle = 'hsl(222,17%,10%)';
+    ctx.fill();
+    // center text
+    ctx.fillStyle = '#f5f5f5';
+    ctx.font = 'bold 22px Inter, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(total, cx, cy - 6);
+    ctx.fillStyle = '#6b7a96';
+    ctx.font = '11px Inter, sans-serif';
+    ctx.fillText('evals', cx, cy + 12);
+  })();
+  </script>
+  {% else %}
+  <div class="empty-state">
+    <div class="empty-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      </svg>
+    </div>
+    <h4>No risk data yet</h4>
+    <p>Risk scores appear after deployments are evaluated.</p>
+  </div>
+  {% endif %}
+</div>
+
+<!-- ── Recent assessments ──────────────────────────── -->
+<div class="panel">
+  <div class="panel-head">
+    <h3>Recent Assessments</h3>
+    <div class="panel-actions">
+      <div class="search-box">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input type="text" id="risk-search" placeholder="Filter…" autocomplete="off">
+      </div>
+    </div>
+  </div>
+
+  {% if recent_risks %}
+  <div id="risk-list">
+    {% for r in recent_risks %}
+    {% set rl = (r.risk_level or 'low') | lower %}
+    {% set ring = 'ring-green' if rl == 'low' else ('ring-yellow' if rl == 'moderate' else ('ring-orange' if rl == 'high' else 'ring-red')) %}
+    <div class="risk-item">
+      <div class="risk-score-ring {{ ring }}">{{ r.risk_score }}</div>
+      <div class="risk-info">
+        <div class="risk-info-top">
+          <a href="/dashboard/deployments/{{ r.deployment_id }}" class="risk-deploy-id">
+            {{ r.deployment_id | string | truncate(8, true, '') }}…
+          </a>
+          <span class="badge risk-{{ rl }}">{{ r.risk_level }}</span>
+          <span class="risk-prob">{{ (r.failure_probability * 100) | round(1) if r.failure_probability else 0 }}% fail prob</span>
+        </div>
+        <div class="risk-rec">{{ r.recommendation or '—' }}</div>
+      </div>
+      <div class="muted small nowrap">{{ r.created_at.strftime('%b %d, %H:%M') if r.created_at else '—' }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <div class="empty-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      </svg>
+    </div>
+    <h4>No assessments yet</h4>
+  </div>
+  {% endif %}
+</div>
+
+<script>
+  const rs = document.getElementById('risk-search');
+  if (rs) {
+    rs.addEventListener('input', () => {
+      const q = rs.value.toLowerCase();
+      document.querySelectorAll('#risk-list .risk-item').forEach(r => {
+        r.style.display = r.textContent.toLowerCase().includes(q) ? '' : 'none';
+      });
+    });
+  }
+</script>
+{% endblock %}

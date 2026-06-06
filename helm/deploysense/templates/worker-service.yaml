@@ -1,0 +1,57 @@
+# DeploySense — Worker Service Kubernetes Deployment
+#
+# WHY different from API/Risk Engine:
+#   - No Service object (doesn't receive traffic)
+#   - No HPA (single instance with leader election in Phase 3)
+#   - No health probes (long-running process, not HTTP server)
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker-service
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: worker-service
+    component: worker
+spec:
+  replicas: {{ .Values.workerService.replicas }}
+  selector:
+    matchLabels:
+      app: worker-service
+  template:
+    metadata:
+      labels:
+        app: worker-service
+        component: worker
+    spec:
+      containers:
+        - name: worker-service
+          image: "{{ .Values.image.registry }}/{{ .Values.image.repository }}-worker:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          env:
+            - name: ENVIRONMENT
+              value: {{ .Values.global.environment }}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.database.existingSecret }}
+                  key: async-url
+            - name: REDIS_URL
+              value: "redis://{{ .Values.redis.host }}:{{ .Values.redis.port }}/0"
+            - name: GITHUB_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: deploysense-github-secrets
+                  key: client-id
+            - name: GITHUB_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: deploysense-github-secrets
+                  key: client-secret
+          resources:
+            requests:
+              cpu: {{ .Values.workerService.resources.requests.cpu }}
+              memory: {{ .Values.workerService.resources.requests.memory }}
+            limits:
+              cpu: {{ .Values.workerService.resources.limits.cpu }}
+              memory: {{ .Values.workerService.resources.limits.memory }}

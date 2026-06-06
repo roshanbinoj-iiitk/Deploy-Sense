@@ -1,0 +1,177 @@
+# DeploySense — CI Pipeline
+#
+# ARCHITECTURE DECISION:
+# GitHub Actions for CI because:
+#   1. Free for public repos
+#   2. Native GitHub integration (webhooks, status checks)
+#   3. Ephemeral runners (no infrastructure to manage)
+#   4. Matrix builds for Python version testing
+#
+# PIPELINE STAGES:
+#   1. Lint (ruff, mypy) — fail fast on code quality
+#   2. Test (pytest) — unit + integration tests
+#   3. Build (Docker) — create container images
+#   4. Push (GHCR) — publish to GitHub Container Registry
+#
+# ArgoCD watches GHCR for new images and deploys automatically.
+# This pipeline does NOT deploy — that's GitOps via ArgoCD.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  PYTHON_VERSION: "3.13"
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # ─── Stage 1: Lint ───────────────────────────────────────────────────────
+  lint:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Ruff lint
+        run: ruff check .
+
+      - name: Ruff format check
+        run: ruff format --check .
+
+      - name: MyPy type check
+        run: mypy deploysense/ --ignore-missing-imports
+
+  # ─── Stage 2: Test ───────────────────────────────────────────────────────
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    needs: lint
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: deploysense_test
+          POSTGRES_USER: deploysense
+          POSTGRES_PASSWORD: test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: "postgresql+asyncpg://deploysense:test_password@localhost:5432/deploysense_test"
+      DATABASE_URL_SYNC: "postgresql://deploysense:test_password@localhost:5432/deploysense_test"
+      REDIS_URL: "redis://localhost:6379/0"
+      ENVIRONMENT: "test"
+      SECRET_KEY: "test-secret-key"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Run database migrations
+        run: alembic upgrade head
+
+      - name: Run tests
+        run: pytest --cov=deploysense --cov-report=xml --cov-report=term-missing
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          file: coverage.xml
+        if: github.event_name == 'push'
+
+  # ─── Stage 3: Build & Push Docker Images ─────────────────────────────────
+  build:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      matrix:
+        service: [api, risk-engine, worker]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${{ matrix.service }}
+          tags: |
+            type=sha,prefix=
+            type=raw,value=latest
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          build-args: SERVICE=${{ matrix.service }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  # ─── Stage 4: Security Scan ──────────────────────────────────────────────
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Bandit security scan
+        run: bandit -r deploysense/ -c pyproject.toml || true

@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% set active_page = "deployments" %}
+{% block title %}DeploySense — Deployments{% endblock %}
+{% block page_title %}Deployments{% endblock %}
+{% block page_caption %}All releases across environments{% endblock %}
+
+{% block content %}
+
+<div class="page-strip">
+  <div class="page-strip-left">
+    <h2>Deployments</h2>
+    <p>{{ total }} total &mdash; page {{ page }} of {{ total_pages }}</p>
+  </div>
+  <div class="page-strip-chips">
+    {% if status_filter %}
+    <span class="chip">Filtered: {{ status_filter }}</span>
+    {% endif %}
+    {% if environment_filter %}
+    <span class="chip">Env: {{ environment_filter }}</span>
+    {% endif %}
+  </div>
+</div>
+
+<!-- ── Filters ─────────────────────────────────────── -->
+<div class="filter-bar">
+  <a href="/dashboard/deployments"                                        class="filter-btn {% if not status_filter %}active{% endif %}">All</a>
+  <a href="/dashboard/deployments?status=PENDING"                         class="filter-btn {% if status_filter == 'PENDING' %}active{% endif %}">Pending</a>
+  <a href="/dashboard/deployments?status=DEPLOYING"                       class="filter-btn {% if status_filter == 'DEPLOYING' %}active{% endif %}">Deploying</a>
+  <a href="/dashboard/deployments?status=DEPLOYED"                        class="filter-btn {% if status_filter == 'DEPLOYED' %}active{% endif %}">Deployed</a>
+  <a href="/dashboard/deployments?status=MONITORING"                      class="filter-btn {% if status_filter == 'MONITORING' %}active{% endif %}">Monitoring</a>
+  <a href="/dashboard/deployments?status=STABLE"                          class="filter-btn {% if status_filter == 'STABLE' %}active{% endif %}">Stable</a>
+  <a href="/dashboard/deployments?status=FAILED"                          class="filter-btn {% if status_filter == 'FAILED' %}active{% endif %}">Failed</a>
+  <a href="/dashboard/deployments?status=ROLLED_BACK"                     class="filter-btn {% if status_filter == 'ROLLED_BACK' %}active{% endif %}">Rolled Back</a>
+  <a href="/dashboard/deployments?environment=production"                 class="filter-btn {% if environment_filter == 'production' %}active{% endif %}">Production</a>
+  <a href="/dashboard/deployments?environment=staging"                    class="filter-btn {% if environment_filter == 'staging' %}active{% endif %}">Staging</a>
+</div>
+
+<!-- ── Table ───────────────────────────────────────── -->
+<div class="panel">
+  <div class="panel-head">
+    <h3>{{ total }} Deployment{{ 's' if total != 1 else '' }}</h3>
+    <div class="panel-actions">
+      <div class="search-box">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input type="text" id="dep-search" placeholder="Filter rows…" autocomplete="off">
+      </div>
+    </div>
+  </div>
+
+  {% if deployments %}
+  <table class="tbl" id="dep-table">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Environment</th>
+        <th>Version</th>
+        <th>SHA</th>
+        <th>Status</th>
+        <th>Risk</th>
+        <th>Deployed By</th>
+        <th>Created</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for d in deployments %}
+      <tr>
+        <td>
+          <a href="/dashboard/deployments/{{ d.id }}" class="mono" style="color:var(--accent)">
+            {{ d.id | string | truncate(8, true, '') }}…
+          </a>
+        </td>
+        <td>
+          {% set env = d.environment or 'unknown' %}
+          <span class="badge {% if env == 'production' %}b-prod{% elif env == 'staging' %}b-staging{% else %}b-dev{% endif %}">
+            {{ env }}
+          </span>
+        </td>
+        <td class="mono">{{ d.version or '—' }}</td>
+        <td class="mono muted small">{{ d.git_sha[:7] if d.git_sha else '—' }}</td>
+        <td>
+          {% set sl = (d.status or 'pending') | lower | replace(' ','_') %}
+          <span class="status-pill sp-{{ sl }}">{{ d.status or 'PENDING' }}</span>
+        </td>
+        <td>
+          {% if d.risk_score is not none %}
+          {% set rl = (d.risk_level or 'low') | lower %}
+          <span class="badge risk-{{ rl }}">{{ d.risk_score }}</span>
+          {% else %}
+          <span class="muted small">—</span>
+          {% endif %}
+        </td>
+        <td>{{ d.deployed_by or '—' }}</td>
+        <td class="mono muted small">{{ d.created_at.strftime('%Y-%m-%d %H:%M') if d.created_at else '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty-state">
+    <div class="empty-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/>
+        <path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/>
+      </svg>
+    </div>
+    <h4>No deployments found</h4>
+    <p>Try adjusting the filters above.</p>
+  </div>
+  {% endif %}
+</div>
+
+<!-- ── Pagination ──────────────────────────────────── -->
+{% if total_pages > 1 %}
+<div class="pagination">
+  {% if page > 1 %}
+  <a href="/dashboard/deployments?page={{ page - 1 }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if environment_filter %}&environment={{ environment_filter }}{% endif %}">&lsaquo; Prev</a>
+  {% endif %}
+  {% for p in range([1, page - 2] | max, [total_pages + 1, page + 3] | min) %}
+  {% if p == page %}
+  <span class="pg-active">{{ p }}</span>
+  {% else %}
+  <a href="/dashboard/deployments?page={{ p }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if environment_filter %}&environment={{ environment_filter }}{% endif %}">{{ p }}</a>
+  {% endif %}
+  {% endfor %}
+  {% if page < total_pages %}
+  <a href="/dashboard/deployments?page={{ page + 1 }}{% if status_filter %}&status={{ status_filter }}{% endif %}{% if environment_filter %}&environment={{ environment_filter }}{% endif %}">Next &rsaquo;</a>
+  {% endif %}
+</div>
+{% endif %}
+
+<script>
+  const inp = document.getElementById('dep-search');
+  if (inp) {
+    inp.addEventListener('input', () => {
+      const q = inp.value.toLowerCase();
+      document.querySelectorAll('#dep-table tbody tr').forEach(r => {
+        r.style.display = r.textContent.toLowerCase().includes(q) ? '' : 'none';
+      });
+    });
+  }
+</script>
+{% endblock %}

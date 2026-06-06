@@ -1,0 +1,115 @@
+# DeploySense — API Service Kubernetes Deployment
+#
+# WHY these settings:
+#   replicas: 2 minimum for high availability
+#   readinessProbe: Don't send traffic until the service is ready
+#   livenessProbe: Restart if the service becomes unresponsive
+#   resources: Prevent a single pod from consuming all node resources
+#
+# TRADEOFF: We use Deployment (not StatefulSet) because our services
+# are stateless. State lives in PostgreSQL and Redis.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-service
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    app: api-service
+    component: api
+spec:
+  replicas: {{ .Values.apiService.replicas }}
+  selector:
+    matchLabels:
+      app: api-service
+  template:
+    metadata:
+      labels:
+        app: api-service
+        component: api
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "{{ .Values.apiService.port }}"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+        - name: api-service
+          image: "{{ .Values.image.registry }}/{{ .Values.image.repository }}-api:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.apiService.port }}
+              protocol: TCP
+          env:
+            - name: ENVIRONMENT
+              value: {{ .Values.global.environment }}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.database.existingSecret }}
+                  key: async-url
+            - name: REDIS_URL
+              value: "redis://{{ .Values.redis.host }}:{{ .Values.redis.port }}/0"
+            - name: RISK_ENGINE_URL
+              value: "http://risk-engine:{{ .Values.riskEngine.port }}"
+            - name: SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: deploysense-app-secrets
+                  key: secret-key
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.apiService.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.apiService.port }}
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: {{ .Values.apiService.resources.requests.cpu }}
+              memory: {{ .Values.apiService.resources.requests.memory }}
+            limits:
+              cpu: {{ .Values.apiService.resources.limits.cpu }}
+              memory: {{ .Values.apiService.resources.limits.memory }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-service
+  namespace: {{ .Values.global.namespace }}
+spec:
+  selector:
+    app: api-service
+  ports:
+    - port: {{ .Values.apiService.port }}
+      targetPort: {{ .Values.apiService.port }}
+      protocol: TCP
+  type: ClusterIP
+---
+{{- if .Values.apiService.autoscaling.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: api-service
+  namespace: {{ .Values.global.namespace }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: api-service
+  minReplicas: {{ .Values.apiService.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.apiService.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.apiService.autoscaling.targetCPUUtilization }}
+{{- end }}

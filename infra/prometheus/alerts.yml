@@ -1,0 +1,112 @@
+# DeploySense — Prometheus Alerting Rules (Phase 2)
+#
+# These rules define conditions that trigger alerts in Grafana.
+# Prometheus evaluates these rules continuously.
+#
+# Maps to architecture/07-observability.md section 7.6
+
+groups:
+  - name: deploysense.rules
+    rules:
+      # ─── Service Health ─────────────────────────────────────────────
+      - alert: APIServiceDown
+        expr: up{job="api-service"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "API Service is down"
+          description: "The DeploySense API service has been unreachable for 1 minute."
+
+      - alert: RiskEngineDown
+        expr: up{job="risk-engine"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Risk Engine is down"
+          description: "The risk evaluation engine is unreachable. Deployments cannot be risk-assessed."
+
+      # ─── Error Rate ─────────────────────────────────────────────────
+      - alert: HighErrorRate
+        expr: rate(deploysense_http_requests_total{status=~"5.."}[5m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High 5xx error rate"
+          description: "API is returning more than 5 errors/sec for 5 minutes."
+
+      - alert: RiskEngineHighErrorRate
+        expr: rate(deploysense_risk_engine_errors_total[5m]) > 2
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Risk engine error rate elevated"
+          description: "Risk engine is failing more than 2 evaluations/sec."
+
+      # ─── Deployment Health ──────────────────────────────────────────
+      - alert: HighDeploymentFailureRate
+        expr: increase(deploysense_deployment_failures_total[1h]) > 5
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High deployment failure rate"
+          description: "More than 5 deployment failures in the last hour."
+
+      - alert: HighRollbackRate
+        expr: increase(deploysense_rollbacks_total[1h]) > 3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High rollback rate"
+          description: "More than 3 rollbacks in the last hour."
+
+      # ─── Infrastructure ────────────────────────────────────────────
+      - alert: PostgreSQLDown
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL is down"
+
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis is down"
+
+      - alert: HighPostgresConnections
+        expr: pg_stat_activity_count > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL connection count is high"
+          description: "More than 80 active connections. Pool may be exhausted."
+
+      # ─── Worker Health ─────────────────────────────────────────────
+      - alert: WorkerJobFailures
+        expr: increase(deploysense_worker_failures_total[30m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Worker job failures detected"
+          description: "More than 5 worker job failures in the last 30 minutes."
+
+      # ─── Risk Engine Performance ───────────────────────────────────
+      - alert: RiskEngineSlowLatency
+        expr: histogram_quantile(0.99, rate(deploysense_risk_calculation_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Risk engine p99 latency above 2s"
+          description: "Risk evaluations are taking longer than expected."
