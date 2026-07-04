@@ -27,6 +27,7 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
 from deploysense.api.auth import (
+    AuthenticatedUser,
     create_access_token,
     exchange_github_code,
     fetch_github_user,
@@ -46,13 +47,16 @@ _users: dict[str, dict] = {}
 
 # ─── Request/Response Schemas ────────────────────────────────────────────────
 
+
 class GitHubAuthRequest(BaseModel):
     """OAuth authorization code from GitHub."""
+
     code: str
 
 
 class AuthResponse(BaseModel):
     """JWT token response after successful authentication."""
+
     access_token: str
     token_type: str = "bearer"
     user: "UserProfile"
@@ -60,6 +64,7 @@ class AuthResponse(BaseModel):
 
 class UserProfile(BaseModel):
     """Authenticated user profile."""
+
     id: uuid.UUID
     github_username: str
     email: str | None
@@ -70,6 +75,7 @@ class UserProfile(BaseModel):
 
 
 # ─── Helper: upsert user in memory store ────────────────────────────────────
+
 
 def _upsert_user(github_user: dict) -> dict:
     """Create or update user in the in-memory store. Returns user dict."""
@@ -91,6 +97,7 @@ def _upsert_user(github_user: dict) -> dict:
 
 
 # ─── POST /auth/github ──────────────────────────────────────────────────────
+
 
 @router.post("/auth/github", response_model=AuthResponse)
 async def github_auth(
@@ -129,18 +136,20 @@ async def github_auth(
 
 # ─── GET /auth/me ────────────────────────────────────────────────────────────
 
+
 @router.get("/auth/me", response_model=UserProfile)
-async def get_me(user: dict = Depends(get_current_user)) -> UserProfile:
+async def get_me(user: AuthenticatedUser = Depends(get_current_user)) -> UserProfile:
     """
     Get the currently authenticated user's profile.
 
     PURPOSE: Frontend calls this on page load to verify the JWT
     is still valid and display user info in the navigation bar.
     """
-    return UserProfile(**user)
+    return UserProfile.model_validate(user)
 
 
 # ─── GET /auth/github/login ─────────────────────────────────────────────────
+
 
 @router.get("/auth/github/login")
 async def github_login() -> RedirectResponse:
@@ -161,11 +170,13 @@ async def github_login() -> RedirectResponse:
     settings = get_settings()
     # Build the backend callback URL (must match GitHub OAuth app settings)
     backend_base = f"http://localhost:{settings.backend_port}"
-    params = urlencode({
-        "client_id": settings.github_client_id,
-        "redirect_uri": f"{backend_base}/api/v1/auth/github/callback",
-        "scope": "user:email read:user",
-    })
+    params = urlencode(
+        {
+            "client_id": settings.github_client_id,
+            "redirect_uri": f"{backend_base}/api/v1/auth/github/callback",
+            "scope": "user:email read:user",
+        }
+    )
     return RedirectResponse(
         url=f"https://github.com/login/oauth/authorize?{params}",
         status_code=302,
@@ -173,6 +184,7 @@ async def github_login() -> RedirectResponse:
 
 
 # ─── GET /auth/github/callback ──────────────────────────────────────────────
+
 
 @router.get("/auth/github/callback")
 async def github_callback(
@@ -220,7 +232,9 @@ async def github_callback(
         )
 
         # Step 5: Redirect to frontend callback page with token
-        frontend_callback = f"{settings.frontend_url.rstrip('/')}/auth/callback?token={access_token}"
+        frontend_callback = (
+            f"{settings.frontend_url.rstrip('/')}/auth/callback?token={access_token}"
+        )
         return RedirectResponse(url=frontend_callback, status_code=302)
 
     except Exception as e:

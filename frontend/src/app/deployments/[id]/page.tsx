@@ -4,6 +4,7 @@ import { RiskBadge, StatusPill, EnvBadge } from '@/components/ui/Badge';
 import PageHeader from '@/components/ui/PageHeader';
 import Panel from '@/components/ui/Panel';
 import EmptyState from '@/components/ui/EmptyState';
+import AIAnalysisSection from '@/components/ui/AIAnalysisSection';
 import { Search, Activity, Shield } from 'lucide-react';
 
 function fmt(iso: string) {
@@ -175,6 +176,8 @@ export default async function DeploymentDetailPage({
           )}
         </Panel>
       </div>
+
+      <AIAnalysisSection deploymentId={deployment.id} />
     </div>
   );
 }

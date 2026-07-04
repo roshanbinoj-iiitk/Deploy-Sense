@@ -16,6 +16,7 @@ ENDPOINTS (maps to architecture/03-api-definitions.md section 3.1.3):
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from deploysense.api.schemas import (
     DeploymentListResponse,
@@ -32,6 +33,7 @@ router = APIRouter()
 
 # ─── GET /services ───────────────────────────────────────────────────────────
 
+
 @router.get("/services", response_model=list[ServiceResponse])
 async def list_services(
     db: AsyncSession = Depends(get_db_session),
@@ -42,14 +44,13 @@ async def list_services(
     PURPOSE: Dashboard sidebar showing all services with their
     stability scores and status at a glance.
     """
-    result = await db.execute(
-        select(Service).order_by(Service.name)
-    )
+    result = await db.execute(select(Service).order_by(Service.name))
     services = result.scalars().all()
     return [ServiceResponse.model_validate(s) for s in services]
 
 
 # ─── GET /services/{name} ───────────────────────────────────────────────────
+
 
 @router.get("/services/{service_name}", response_model=ServiceResponse)
 async def get_service(
@@ -62,9 +63,7 @@ async def get_service(
     WHY by name, not ID: Services are referenced by name everywhere
     (CLI, CI/CD, dashboards). UUIDs are internal identifiers.
     """
-    result = await db.execute(
-        select(Service).where(Service.name == service_name)
-    )
+    result = await db.execute(select(Service).where(Service.name == service_name))
     service = result.scalar_one_or_none()
 
     if not service:
@@ -74,6 +73,7 @@ async def get_service(
 
 
 # ─── GET /services/{name}/health ─────────────────────────────────────────────
+
 
 @router.get("/services/{service_name}/health", response_model=ServiceHealthResponse)
 async def get_service_health(
@@ -92,9 +92,7 @@ async def get_service_health(
     is 5%. DeploySense tells you error rate went from 0.1% to 5% right
     after deploying v2.1.0. That correlation is the value.
     """
-    result = await db.execute(
-        select(Service).where(Service.name == service_name)
-    )
+    result = await db.execute(select(Service).where(Service.name == service_name))
     service = result.scalar_one_or_none()
 
     if not service:
@@ -122,8 +120,12 @@ async def get_service_health(
     if latest_metrics:
         metrics_dict = {
             "error_rate": float(latest_metrics.error_rate) if latest_metrics.error_rate else None,
-            "latency_p99_ms": float(latest_metrics.latency_p99_ms) if latest_metrics.latency_p99_ms else None,
-            "request_rate_rps": float(latest_metrics.request_rate_rps) if latest_metrics.request_rate_rps else None,
+            "latency_p99_ms": float(latest_metrics.latency_p99_ms)
+            if latest_metrics.latency_p99_ms
+            else None,
+            "request_rate_rps": float(latest_metrics.request_rate_rps)
+            if latest_metrics.request_rate_rps
+            else None,
         }
 
     return ServiceHealthResponse(
@@ -135,6 +137,7 @@ async def get_service_health(
 
 
 # ─── GET /services/{name}/deployments ────────────────────────────────────────
+
 
 @router.get("/services/{service_name}/deployments", response_model=DeploymentListResponse)
 async def get_service_deployments(
@@ -149,9 +152,7 @@ async def get_service_deployments(
     PURPOSE: "Show me the last 20 deployments of payments-api."
     Used by the service detail page in the dashboard.
     """
-    result = await db.execute(
-        select(Service).where(Service.name == service_name)
-    )
+    result = await db.execute(select(Service).where(Service.name == service_name))
     service = result.scalar_one_or_none()
 
     if not service:
@@ -159,6 +160,7 @@ async def get_service_deployments(
 
     query = (
         select(Deployment)
+        .options(selectinload(Deployment.service))
         .where(Deployment.service_id == service.id)
         .order_by(Deployment.created_at.desc())
         .offset((page - 1) * per_page)
@@ -168,6 +170,7 @@ async def get_service_deployments(
     deployments = deploy_result.scalars().all()
 
     from sqlalchemy import func
+
     count_result = await db.execute(
         select(func.count(Deployment.id)).where(Deployment.service_id == service.id)
     )

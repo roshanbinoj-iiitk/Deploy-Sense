@@ -72,7 +72,8 @@ async_session_factory = async_sessionmaker(
 # FastAPI dependency: `async for session in get_db_session():`
 # Yields a session, commits on success, rolls back on exception.
 
-async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
+
+async def get_db_session() -> AsyncGenerator[AsyncSession]:
     """
     FastAPI dependency that provides a database session per request.
 

@@ -56,12 +56,13 @@ logger = get_logger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     setup_logging()
     logger.info("risk_engine_starting")
     yield
     logger.info("risk_engine_shutting_down")
     from deploysense.database.session import engine
+
     await engine.dispose()
 
 
@@ -75,6 +76,7 @@ app = FastAPI(
 
 
 # ─── Health & Metrics ────────────────────────────────────────────────────────
+
 
 @app.get("/health")
 async def health() -> dict[str, str]:

@@ -15,14 +15,13 @@ in migrations, check that it's imported here.
 
 from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy import engine_from_config, pool
-
-from deploysense.core import get_settings
-from deploysense.database.base import Base
 
 # Import ALL models so Alembic sees them for autogenerate
 import deploysense.models  # noqa: F401
+from alembic import context
+from deploysense.core import get_settings
+from deploysense.database.base import Base
 
 # Alembic Config object
 config = context.config

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, Rocket, Server, Shield, AlertTriangle, LogOut } from 'lucide-react';
+import { LayoutDashboard, Rocket, Server, Shield, AlertTriangle, LogOut, GitBranch } from 'lucide-react';
 
 /** GitHub Octocat SVG — lucide-react doesn't include a GitHub icon in this version */
 function GithubIcon({ className }: { className?: string }) {
@@ -17,6 +17,7 @@ import { useAuth } from '@/lib/auth';
 const navItems = [
   { href: '/',            label: 'Overview',      icon: LayoutDashboard },
   { href: '/deployments', label: 'Deployments',   icon: Rocket },
+  { href: '/repositories', label: 'Repositories', icon: GitBranch },
   { href: '/services',    label: 'Services',      icon: Server },
   { href: '/risk',        label: 'Risk Analysis',  icon: Shield },
   { href: '/alerts',      label: 'Alerts',        icon: AlertTriangle },

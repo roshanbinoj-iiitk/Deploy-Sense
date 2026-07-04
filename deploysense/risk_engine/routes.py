@@ -15,17 +15,19 @@ ENDPOINTS:
 """
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from deploysense.api.schemas import (
     RiskEvaluationRequest,
     RiskEvaluationResponse,
-    RiskFactor as SchemaRiskFactor,
     RiskHistoryResponse,
+)
+from deploysense.api.schemas import (
+    RiskFactor as SchemaRiskFactor,
 )
 from deploysense.database import get_db_session
 from deploysense.logging import get_logger
@@ -43,6 +45,7 @@ router = APIRouter()
 
 
 # ─── POST /internal/risk/evaluate ────────────────────────────────────────────
+
 
 @router.post("/internal/risk/evaluate", response_model=RiskEvaluationResponse)
 async def evaluate_risk(
@@ -72,9 +75,7 @@ async def evaluate_risk(
                 service_id = str(deployment.service_id) if deployment.service_id else None
 
             # Collect historical features
-            historical = await collect_historical_features(
-                db, service_id, body.environment
-            )
+            historical = await collect_historical_features(db, service_id, body.environment)
 
             # Build complete feature vector
             features = RiskFeatures(
@@ -110,7 +111,10 @@ async def evaluate_risk(
                     deployment.status = "RISK_ASSESSED"
 
                 # Auto-block CRITICAL deployments
-                if result.risk_level == "CRITICAL" and deployment.status in ("PENDING", "RISK_ASSESSED"):
+                if result.risk_level == "CRITICAL" and deployment.status in (
+                    "PENDING",
+                    "RISK_ASSESSED",
+                ):
                     deployment.status = "BLOCKED"
                     logger.warning(
                         "deployment_auto_blocked",
@@ -131,7 +135,7 @@ async def evaluate_risk(
                         f"Recommendation: {result.recommendation}"
                     ),
                     status="OPEN",
-                    triggered_at=datetime.now(timezone.utc),
+                    triggered_at=datetime.now(UTC),
                 )
                 db.add(alert)
 
@@ -165,6 +169,7 @@ async def evaluate_risk(
 
 # ─── GET /internal/risk/{deployment_id} ──────────────────────────────────────
 
+
 @router.get("/internal/risk/{deployment_id}", response_model=RiskHistoryResponse)
 async def get_latest_risk(
     deployment_id: uuid.UUID,
@@ -187,6 +192,7 @@ async def get_latest_risk(
 
 # ─── GET /internal/risk/history/{service} ────────────────────────────────────
 
+
 @router.get("/internal/risk/history/{service_name}", response_model=list[RiskHistoryResponse])
 async def get_risk_history(
     service_name: str,
@@ -194,9 +200,7 @@ async def get_risk_history(
     db: AsyncSession = Depends(get_db_session),
 ) -> list[RiskHistoryResponse]:
     """Risk history for a service — used by dashboard trend charts."""
-    svc_result = await db.execute(
-        select(Service).where(Service.name == service_name)
-    )
+    svc_result = await db.execute(select(Service).where(Service.name == service_name))
     service = svc_result.scalar_one_or_none()
     if not service:
         raise HTTPException(status_code=404, detail=f"Service '{service_name}' not found")
@@ -214,6 +218,7 @@ async def get_risk_history(
 
 
 # ─── GET /internal/risk/trends/{service} (Sprint 2) ─────────────────────────
+
 
 @router.get("/internal/risk/trends/{service_name}")
 async def get_risk_trends(
@@ -234,14 +239,12 @@ async def get_risk_trends(
       - max_score: Peak risk score
       - total_evaluations: Number of risk assessments
     """
-    svc_result = await db.execute(
-        select(Service).where(Service.name == service_name)
-    )
+    svc_result = await db.execute(select(Service).where(Service.name == service_name))
     service = svc_result.scalar_one_or_none()
     if not service:
         raise HTTPException(status_code=404, detail=f"Service '{service_name}' not found")
 
-    since = datetime.now(timezone.utc) - timedelta(days=days)
+    since = datetime.now(UTC) - timedelta(days=days)
 
     # Fetch all assessments in the period
     result = await db.execute(

@@ -35,12 +35,15 @@ router = APIRouter()
 
 # ─── Response Schema ─────────────────────────────────────────────────────────
 
+
 class AlertListResponse:
     """Not using Pydantic here — returning dict for flexibility."""
+
     pass
 
 
 # ─── GET /alerts ─────────────────────────────────────────────────────────────
+
 
 @router.get("/alerts")
 async def list_alerts(
@@ -85,6 +88,7 @@ async def list_alerts(
 
 # ─── GET /alerts/{id} ───────────────────────────────────────────────────────
 
+
 @router.get("/alerts/{alert_id}", response_model=AlertResponse)
 async def get_alert(
     alert_id: uuid.UUID,
@@ -102,6 +106,7 @@ async def get_alert(
 
 
 # ─── POST /alerts/{id}/acknowledge ───────────────────────────────────────────
+
 
 @router.post("/alerts/{alert_id}/acknowledge", response_model=AlertResponse)
 async def acknowledge_alert(
@@ -141,6 +146,7 @@ async def acknowledge_alert(
 
 
 # ─── POST /alerts/{id}/resolve ───────────────────────────────────────────────
+
 
 @router.post("/alerts/{alert_id}/resolve", response_model=AlertResponse)
 async def resolve_alert(

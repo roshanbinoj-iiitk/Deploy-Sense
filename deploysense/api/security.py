@@ -23,7 +23,7 @@ RATE LIMITING STRATEGY:
 import time
 import uuid
 from collections import defaultdict
-from typing import Callable
+from collections.abc import Callable
 
 from fastapi import FastAPI, Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -34,6 +34,7 @@ logger = get_logger(__name__)
 
 
 # ─── Rate Limiter ────────────────────────────────────────────────────────────
+
 
 class RateLimiter:
     """
@@ -57,11 +58,11 @@ class RateLimiter:
 
     # Endpoint group → (max_tokens, refill_rate_per_second)
     LIMITS: dict[str, tuple[int, float]] = {
-        "default":   (100, 100 / 60),    # 100/min
-        "auth":      (20,  20 / 60),     # 20/min
-        "webhook":   (200, 200 / 60),    # 200/min
-        "admin":     (30,  30 / 60),     # 30/min
-        "ai":        (10,  10 / 60),     # 10/min (LLM calls are expensive)
+        "default": (100, 100 / 60),  # 100/min
+        "auth": (20, 20 / 60),  # 20/min
+        "webhook": (200, 200 / 60),  # 200/min
+        "admin": (30, 30 / 60),  # 30/min
+        "ai": (10, 10 / 60),  # 10/min (LLM calls are expensive)
     }
 
     def _get_group(self, path: str) -> str:
@@ -106,6 +107,7 @@ rate_limiter = RateLimiter()
 
 # ─── Security Headers Middleware ─────────────────────────────────────────────
 
+
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """
     Adds security headers to every response.
@@ -145,6 +147,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 
 # ─── Rate Limit Middleware ───────────────────────────────────────────────────
+
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """
@@ -186,6 +189,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
 
 # ─── Apply Middleware ────────────────────────────────────────────────────────
+
 
 def apply_security_middleware(app: FastAPI) -> None:
     """

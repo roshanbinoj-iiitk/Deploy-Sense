@@ -5,17 +5,15 @@ Tests role-based access control, permission checks,
 rate limiting, and security headers.
 """
 
-import pytest
-
 from deploysense.api.rbac import (
-    Permission,
     ROLE_PERMISSIONS,
+    Permission,
     has_permission,
 )
 from deploysense.api.security import RateLimiter
 
-
 # ─── RBAC Permission Tests ──────────────────────────────────────────────────
+
 
 class TestRolePermissions:
     """Verify role → permission mappings."""
@@ -23,58 +21,69 @@ class TestRolePermissions:
     def test_viewer_can_read_deployments(self):
         class MockUser:
             role = "viewer"
+
         assert has_permission(MockUser(), Permission.DEPLOYMENTS_READ)
 
     def test_viewer_cannot_create_deployments(self):
         class MockUser:
             role = "viewer"
+
         assert not has_permission(MockUser(), Permission.DEPLOYMENTS_CREATE)
 
     def test_engineer_can_create_deployments(self):
         class MockUser:
             role = "engineer"
+
         assert has_permission(MockUser(), Permission.DEPLOYMENTS_CREATE)
 
     def test_engineer_cannot_manage_users(self):
         class MockUser:
             role = "engineer"
+
         assert not has_permission(MockUser(), Permission.USERS_MANAGE)
 
     def test_admin_has_all_permissions(self):
         class MockUser:
             role = "admin"
+
         for perm in Permission:
             assert has_permission(MockUser(), perm), f"Admin missing {perm.value}"
 
     def test_service_can_create_deployments(self):
         class MockUser:
             role = "service"
+
         assert has_permission(MockUser(), Permission.DEPLOYMENTS_CREATE)
 
     def test_service_cannot_manage_users(self):
         class MockUser:
             role = "service"
+
         assert not has_permission(MockUser(), Permission.USERS_MANAGE)
 
     def test_service_cannot_access_dashboard(self):
         class MockUser:
             role = "service"
+
         assert not has_permission(MockUser(), Permission.DASHBOARD_READ)
 
     def test_unknown_role_has_no_permissions(self):
         class MockUser:
             role = "unknown"
+
         assert not has_permission(MockUser(), Permission.DEPLOYMENTS_READ)
 
     def test_none_role_defaults_to_viewer(self):
         class MockUser:
             role = None
+
         # Should not crash
         result = has_permission(MockUser(), Permission.DEPLOYMENTS_READ)
         assert isinstance(result, bool)
 
 
 # ─── Permission Completeness ────────────────────────────────────────────────
+
 
 class TestPermissionCompleteness:
     """Every role should have at least some permissions defined."""
@@ -96,6 +105,7 @@ class TestPermissionCompleteness:
 
 
 # ─── Rate Limiter Tests ─────────────────────────────────────────────────────
+
 
 class TestRateLimiter:
     """Rate limiter should enforce request limits."""

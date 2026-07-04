@@ -6,15 +6,13 @@ Tests the new historical and contextual features added in Sprint 2.
 
 import uuid
 
-import pytest
-
 from deploysense.api.schemas import RiskEvaluationRequest
 from deploysense.risk_engine.scoring import (
     RiskFeatures,
+    _compute_time_risk,
+    _logistic_probability,
     compute_enhanced_risk,
     compute_risk_score,
-    _logistic_probability,
-    _compute_time_risk,
 )
 
 
@@ -36,6 +34,7 @@ def _make_request(**kwargs) -> RiskEvaluationRequest:
 
 # ─── Sprint 1 Backward Compatibility ────────────────────────────────────────
 
+
 class TestBackwardCompatibility:
     """Sprint 1 API must still work with the enhanced engine."""
 
@@ -49,16 +48,19 @@ class TestBackwardCompatibility:
         assert result.risk_score >= 20
 
     def test_combined_factors_still_work(self):
-        result = compute_risk_score(_make_request(
-            has_db_migration=True,
-            has_infra_change=True,
-            files_changed=30,
-        ))
+        result = compute_risk_score(
+            _make_request(
+                has_db_migration=True,
+                has_infra_change=True,
+                files_changed=30,
+            )
+        )
         assert result.risk_score >= 45
         assert result.risk_level in ("MODERATE", "HIGH")
 
 
 # ─── Enhanced Engine: Historical Features ────────────────────────────────────
+
 
 class TestRecentFailures:
     """Recent failures should increase risk significantly."""
@@ -106,13 +108,17 @@ class TestServiceStability:
     """Low stability score should increase risk."""
 
     def test_stable_service_no_risk(self):
-        features = RiskFeatures(service_stability_score=95, deploy_hour_utc=12, deploy_day_of_week=1)
+        features = RiskFeatures(
+            service_stability_score=95, deploy_hour_utc=12, deploy_day_of_week=1
+        )
         result = compute_enhanced_risk(features)
         factor_names = [f.name for f in result.factors]
         assert "service_instability" not in factor_names
 
     def test_unstable_service_adds_risk(self):
-        features = RiskFeatures(service_stability_score=50, deploy_hour_utc=12, deploy_day_of_week=1)
+        features = RiskFeatures(
+            service_stability_score=50, deploy_hour_utc=12, deploy_day_of_week=1
+        )
         result = compute_enhanced_risk(features)
         factor_names = [f.name for f in result.factors]
         assert "service_instability" in factor_names
@@ -123,8 +129,10 @@ class TestMetricsAnomaly:
 
     def test_normal_error_rate_no_risk(self):
         features = RiskFeatures(
-            current_error_rate=0.01, baseline_error_rate=0.01,
-            deploy_hour_utc=12, deploy_day_of_week=1,
+            current_error_rate=0.01,
+            baseline_error_rate=0.01,
+            deploy_hour_utc=12,
+            deploy_day_of_week=1,
         )
         result = compute_enhanced_risk(features)
         factor_names = [f.name for f in result.factors]
@@ -132,8 +140,10 @@ class TestMetricsAnomaly:
 
     def test_elevated_error_rate_adds_risk(self):
         features = RiskFeatures(
-            current_error_rate=0.05, baseline_error_rate=0.01,
-            deploy_hour_utc=12, deploy_day_of_week=1,
+            current_error_rate=0.05,
+            baseline_error_rate=0.01,
+            deploy_hour_utc=12,
+            deploy_day_of_week=1,
         )
         result = compute_enhanced_risk(features)
         factor_names = [f.name for f in result.factors]
@@ -141,6 +151,7 @@ class TestMetricsAnomaly:
 
 
 # ─── Contextual Features ────────────────────────────────────────────────────
+
 
 class TestTimeOfDayRisk:
     """Deployments outside business hours are riskier."""
@@ -169,6 +180,7 @@ class TestTimeOfDayRisk:
 
 # ─── Logistic Probability ───────────────────────────────────────────────────
 
+
 class TestLogisticProbability:
     """Failure probability should follow a logistic curve."""
 
@@ -195,12 +207,15 @@ class TestLogisticProbability:
 
 # ─── Factor Categories ──────────────────────────────────────────────────────
 
+
 class TestFactorCategories:
     """Factors should be categorized correctly."""
 
     def test_static_factors_labeled(self):
         features = RiskFeatures(
-            has_db_migration=True, deploy_hour_utc=12, deploy_day_of_week=1,
+            has_db_migration=True,
+            deploy_hour_utc=12,
+            deploy_day_of_week=1,
         )
         result = compute_enhanced_risk(features)
         migration_factor = next(f for f in result.factors if f.name == "database_migration")
@@ -208,7 +223,9 @@ class TestFactorCategories:
 
     def test_historical_factors_labeled(self):
         features = RiskFeatures(
-            recent_failure_count=3, deploy_hour_utc=12, deploy_day_of_week=1,
+            recent_failure_count=3,
+            deploy_hour_utc=12,
+            deploy_day_of_week=1,
         )
         result = compute_enhanced_risk(features)
         failure_factor = next(f for f in result.factors if f.name == "recent_failures")
@@ -222,6 +239,7 @@ class TestFactorCategories:
 
 
 # ─── Feature Snapshot ────────────────────────────────────────────────────────
+
 
 class TestFeatureSnapshot:
     """Risk result should include the complete feature vector."""

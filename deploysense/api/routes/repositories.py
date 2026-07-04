@@ -21,15 +21,15 @@ FLOW:
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from deploysense.api.auth import get_current_user
+from deploysense.api.auth import AuthenticatedUser, get_current_user
 from deploysense.database import get_db_session
 from deploysense.logging import get_logger
-from deploysense.models import Repository, User
+from deploysense.models import Repository, Service
 
 logger = get_logger(__name__)
 
@@ -38,14 +38,17 @@ router = APIRouter()
 
 # ─── Schemas ─────────────────────────────────────────────────────────────────
 
+
 class RepositoryCreate(BaseModel):
     """Request: Connect a GitHub repository."""
+
     owner: str = Field(..., min_length=1, max_length=255)
     repository: str = Field(..., min_length=1, max_length=255)
 
 
 class RepositoryResponse(BaseModel):
     """Response: Repository information."""
+
     id: uuid.UUID
     owner: str
     repository_name: str
@@ -58,9 +61,10 @@ class RepositoryResponse(BaseModel):
 
 # ─── GET /repositories ──────────────────────────────────────────────────────
 
+
 @router.get("/repositories", response_model=list[RepositoryResponse])
 async def list_repositories(
-    user: User = Depends(get_current_user),
+    user: AuthenticatedUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ) -> list[RepositoryResponse]:
     """
@@ -69,9 +73,7 @@ async def list_repositories(
     FUTURE: Filter by organization_id from the authenticated user.
     For MVP, returns all repositories (single-tenant).
     """
-    result = await db.execute(
-        select(Repository).order_by(Repository.created_at.desc())
-    )
+    result = await db.execute(select(Repository).order_by(Repository.created_at.desc()))
     repos = result.scalars().all()
 
     return [
@@ -89,10 +91,11 @@ async def list_repositories(
 
 # ─── POST /repositories ─────────────────────────────────────────────────────
 
+
 @router.post("/repositories", response_model=RepositoryResponse, status_code=201)
 async def connect_repository(
     body: RepositoryCreate,
-    user: User = Depends(get_current_user),
+    user: AuthenticatedUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ) -> RepositoryResponse:
     """
@@ -126,7 +129,7 @@ async def connect_repository(
         )
 
     repo = Repository(
-        organization_id=user.organization_id,
+        organization_id=uuid.UUID(user.organization_id) if user.organization_id else None,
         owner=body.owner,
         repository_name=body.repository,
         default_branch="main",
@@ -134,6 +137,18 @@ async def connect_repository(
     )
     db.add(repo)
     await db.flush()
+
+    # A repository maps to one deployable service by default. Monorepos can
+    # add more services later, but this makes the first-run workflow complete.
+    db.add(
+        Service(
+            repository_id=repo.id,
+            name=body.repository,
+            environment="production",
+            status="ACTIVE",
+            stability_score=100,
+        )
+    )
 
     logger.info(
         "repository_connected",
@@ -154,16 +169,15 @@ async def connect_repository(
 
 # ─── GET /repositories/{id} ─────────────────────────────────────────────────
 
+
 @router.get("/repositories/{repo_id}", response_model=RepositoryResponse)
 async def get_repository(
     repo_id: uuid.UUID,
-    user: User = Depends(get_current_user),
+    user: AuthenticatedUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ) -> RepositoryResponse:
     """Get repository details by ID."""
-    result = await db.execute(
-        select(Repository).where(Repository.id == repo_id)
-    )
+    result = await db.execute(select(Repository).where(Repository.id == repo_id))
     repo = result.scalar_one_or_none()
 
     if not repo:
@@ -181,10 +195,11 @@ async def get_repository(
 
 # ─── DELETE /repositories/{id} ──────────────────────────────────────────────
 
+
 @router.delete("/repositories/{repo_id}", status_code=204)
 async def disconnect_repository(
     repo_id: uuid.UUID,
-    user: User = Depends(get_current_user),
+    user: AuthenticatedUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ) -> None:
     """
@@ -200,9 +215,7 @@ async def disconnect_repository(
       That's years of deployment intelligence data destroyed. We mark
       as DISCONNECTED and exclude from active queries.
     """
-    result = await db.execute(
-        select(Repository).where(Repository.id == repo_id)
-    )
+    result = await db.execute(select(Repository).where(Repository.id == repo_id))
     repo = result.scalar_one_or_none()
 
     if not repo:
@@ -220,10 +233,11 @@ async def disconnect_repository(
 
 # ─── POST /repositories/{id}/sync ───────────────────────────────────────────
 
+
 @router.post("/repositories/{repo_id}/sync")
 async def trigger_sync(
     repo_id: uuid.UUID,
-    user: User = Depends(get_current_user),
+    user: AuthenticatedUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ) -> dict:
     """
@@ -232,12 +246,10 @@ async def trigger_sync(
     PURPOSE: After connecting a new repo, the user can trigger an
     immediate sync instead of waiting for the 15-minute worker cycle.
 
-    TRADEOFF: This is synchronous for MVP. In production, this should
-    enqueue a background job and return a job_id for polling.
+    This is synchronous for the MVP so the UI can report a truthful result.
+    A production version should enqueue the same operation.
     """
-    result = await db.execute(
-        select(Repository).where(Repository.id == repo_id)
-    )
+    result = await db.execute(select(Repository).where(Repository.id == repo_id))
     repo = result.scalar_one_or_none()
 
     if not repo:
@@ -250,10 +262,22 @@ async def trigger_sync(
         triggered_by=user.github_username,
     )
 
-    # TODO (Phase 1 Sprint 1): Actually call GitHub API and sync PRs
-    # For now, acknowledge the request
+    from deploysense.worker.jobs import _sync_repository
+
+    try:
+        await _sync_repository(db, repo)
+        repo.status = "ACTIVE"
+    except Exception as exc:
+        logger.warning(
+            "repository_sync_failed",
+            owner=repo.owner,
+            repository=repo.repository_name,
+            error=str(exc),
+        )
+        raise HTTPException(status_code=502, detail="GitHub repository sync failed") from exc
+
     return {
-        "status": "QUEUED",
+        "status": "COMPLETED",
         "repository": f"{repo.owner}/{repo.repository_name}",
-        "message": "Sync will be processed shortly",
+        "message": "Recent pull requests and risk signals were synchronized",
     }

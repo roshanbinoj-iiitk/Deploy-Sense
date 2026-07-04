@@ -32,9 +32,9 @@ SCALING:
 
 import asyncio
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from fastapi import WebSocket, WebSocketDisconnect
+from fastapi import WebSocket
 from starlette.websockets import WebSocketState
 
 from deploysense.logging import get_logger
@@ -95,7 +95,7 @@ class ConnectionManager:
         if not self._connections:
             return
 
-        event["timestamp"] = datetime.now(timezone.utc).isoformat()
+        event["timestamp"] = datetime.now(UTC).isoformat()
         message = json.dumps(event)
 
         dead: list[WebSocket] = []
@@ -122,7 +122,7 @@ class ConnectionManager:
 
     async def send_to(self, websocket: WebSocket, event: dict) -> None:
         """Send an event to a specific connection."""
-        event["timestamp"] = datetime.now(timezone.utc).isoformat()
+        event["timestamp"] = datetime.now(UTC).isoformat()
         try:
             await websocket.send_text(json.dumps(event))
         except Exception:
@@ -140,44 +140,55 @@ ws_manager = ConnectionManager()
 # ─── Event Helpers ───────────────────────────────────────────────────────────
 # Convenience functions called by route handlers and workers when events occur.
 
+
 async def emit_deployment_created(deployment_id: str, service: str, environment: str) -> None:
-    await ws_manager.broadcast({
-        "event": "deployment.created",
-        "deployment_id": deployment_id,
-        "service": service,
-        "environment": environment,
-    })
+    await ws_manager.broadcast(
+        {
+            "event": "deployment.created",
+            "deployment_id": deployment_id,
+            "service": service,
+            "environment": environment,
+        }
+    )
 
 
 async def emit_deployment_updated(deployment_id: str, status: str) -> None:
-    await ws_manager.broadcast({
-        "event": "deployment.updated",
-        "deployment_id": deployment_id,
-        "status": status,
-    })
+    await ws_manager.broadcast(
+        {
+            "event": "deployment.updated",
+            "deployment_id": deployment_id,
+            "status": status,
+        }
+    )
 
 
 async def emit_risk_updated(deployment_id: str, risk_score: int, risk_level: str) -> None:
-    await ws_manager.broadcast({
-        "event": "risk.updated",
-        "deployment_id": deployment_id,
-        "risk_score": risk_score,
-        "risk_level": risk_level,
-    })
+    await ws_manager.broadcast(
+        {
+            "event": "risk.updated",
+            "deployment_id": deployment_id,
+            "risk_score": risk_score,
+            "risk_level": risk_level,
+        }
+    )
 
 
 async def emit_alert_created(alert_id: str, severity: str, title: str) -> None:
-    await ws_manager.broadcast({
-        "event": "alert.created",
-        "alert_id": alert_id,
-        "severity": severity,
-        "title": title,
-    })
+    await ws_manager.broadcast(
+        {
+            "event": "alert.created",
+            "alert_id": alert_id,
+            "severity": severity,
+            "title": title,
+        }
+    )
 
 
 async def emit_analysis_completed(analysis_id: str, deployment_id: str) -> None:
-    await ws_manager.broadcast({
-        "event": "analysis.completed",
-        "analysis_id": analysis_id,
-        "deployment_id": deployment_id,
-    })
+    await ws_manager.broadcast(
+        {
+            "event": "analysis.completed",
+            "analysis_id": analysis_id,
+            "deployment_id": deployment_id,
+        }
+    )

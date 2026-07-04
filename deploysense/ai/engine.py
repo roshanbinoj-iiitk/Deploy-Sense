@@ -48,6 +48,7 @@ logger = get_logger(__name__)
 
 # ─── Analysis Types ──────────────────────────────────────────────────────────
 
+
 class DeploymentAnalysis:
     """Result of an AI deployment analysis."""
 
@@ -89,6 +90,7 @@ class DeploymentAnalysis:
 
 # ─── Prompt Builder ──────────────────────────────────────────────────────────
 
+
 def build_deployment_prompt(context: dict) -> str:
     """
     Build a structured prompt for deployment analysis.
@@ -106,29 +108,29 @@ Analyze the following deployment and provide a structured assessment.
 
 ## Deployment Context
 
-- **Service**: {context.get('service_name', 'unknown')}
-- **Environment**: {context.get('environment', 'unknown')}
-- **Git SHA**: {context.get('git_sha', 'unknown')}
-- **Risk Score**: {context.get('risk_score', 0)}/100
-- **Risk Level**: {context.get('risk_level', 'LOW')}
-- **Failure Probability**: {context.get('failure_probability', 0):.1%}
+- **Service**: {context.get("service_name", "unknown")}
+- **Environment**: {context.get("environment", "unknown")}
+- **Git SHA**: {context.get("git_sha", "unknown")}
+- **Risk Score**: {context.get("risk_score", 0)}/100
+- **Risk Level**: {context.get("risk_level", "LOW")}
+- **Failure Probability**: {context.get("failure_probability", 0):.1%}
 
 ## Risk Factors
-{_format_factors(context.get('factors', []))}
+{_format_factors(context.get("factors", []))}
 
 ## Change Details
-- Files Changed: {context.get('files_changed', 0)}
-- Lines Added: {context.get('lines_added', 0)}
-- Lines Deleted: {context.get('lines_deleted', 0)}
-- Has DB Migration: {context.get('has_db_migration', False)}
-- Has Infra Change: {context.get('has_infra_change', False)}
+- Files Changed: {context.get("files_changed", 0)}
+- Lines Added: {context.get("lines_added", 0)}
+- Lines Deleted: {context.get("lines_deleted", 0)}
+- Has DB Migration: {context.get("has_db_migration", False)}
+- Has Infra Change: {context.get("has_infra_change", False)}
 
 ## Service History
-- Recent Failures (7d): {context.get('recent_failure_count', 0)}
-- Deployments (24h): {context.get('deployments_last_24h', 0)}
-- Stability Score: {context.get('service_stability_score', 100)}/100
-- Current Error Rate: {context.get('current_error_rate', 0):.4f}
-- Baseline Error Rate: {context.get('baseline_error_rate', 0):.4f}
+- Recent Failures (7d): {context.get("recent_failure_count", 0)}
+- Deployments (24h): {context.get("deployments_last_24h", 0)}
+- Stability Score: {context.get("service_stability_score", 100)}/100
+- Current Error Rate: {context.get("current_error_rate", 0):.4f}
+- Baseline Error Rate: {context.get("baseline_error_rate", 0):.4f}
 
 ## Instructions
 
@@ -138,6 +140,55 @@ Respond with a JSON object containing:
 3. "root_causes": Array of {{"cause": "...", "confidence": 0.0-1.0, "evidence": "..."}}
 4. "recommendations": Array of {{"action": "...", "priority": "HIGH|MEDIUM|LOW", "reason": "..."}}
 5. "failure_patterns": Array of {{"pattern": "...", "probability": 0.0-1.0, "mitigation": "..."}}
+
+Respond ONLY with valid JSON. No markdown, no explanation outside JSON."""
+
+
+def build_pr_prompt(context: dict) -> str:
+    """
+    Build a structured prompt for pull request analysis.
+
+    Focuses on pre-deployment signals:
+    - Change size and complexity
+    - Database/infrastructure impact
+    - Service stability context
+    """
+    return f"""You are DeploySense, a deployment intelligence system that analyzes
+pull requests for deployment risk BEFORE they are merged.
+
+Analyze the following pull request and provide a structured risk assessment.
+
+## Pull Request Context
+
+- **Repository**: {context.get("repository", "unknown")}
+- **PR Number**: #{context.get("pr_number", "unknown")}
+- **Title**: {context.get("pr_title", "Untitled")}
+- **Author**: {context.get("pr_author", "unknown")}
+- **State**: {context.get("pr_state", "unknown")}
+
+## Change Details
+
+- Files Changed: {context.get("files_changed", 0)}
+- Lines Added: {context.get("lines_added", 0)}
+- Lines Deleted: {context.get("lines_deleted", 0)}
+- Has DB Migration: {context.get("has_db_migration", False)}
+- Has Infra Change: {context.get("has_infra_change", False)}
+
+## Service History
+
+- Service: {context.get("service_name", "unknown")}
+- Recent Failures (7d): {context.get("recent_failure_count", 0)}
+- Deployments (24h): {context.get("deployments_last_24h", 0)}
+- Stability Score: {context.get("service_stability_score", 100)}/100
+
+## Instructions
+
+Respond with a JSON object containing:
+1. "summary": A 1-2 sentence summary of the PR risk level
+2. "risk_explanation": Why this PR carries this risk level (2-3 sentences)
+3. "root_causes": Array of {{"cause": "...", "confidence": 0.0-1.0, "evidence": "..."}} for potential risk factors
+4. "recommendations": Array of {{"action": "...", "priority": "HIGH|MEDIUM|LOW", "reason": "..."}} for the reviewer
+5. "failure_patterns": Array of {{"pattern": "...", "probability": 0.0-1.0, "mitigation": "..."}} for likely failure modes
 
 Respond ONLY with valid JSON. No markdown, no explanation outside JSON."""
 
@@ -153,6 +204,7 @@ def _format_factors(factors: list[dict]) -> str:
 
 
 # ─── AI Engine ───────────────────────────────────────────────────────────────
+
 
 class AIEngine:
     """
@@ -223,8 +275,58 @@ class AIEngine:
             )
             return self._rule_based_analysis(context, latency)
 
+    async def analyze_pull_request(self, context: dict) -> DeploymentAnalysis:
+        """
+        Analyze a pull request for pre-deployment risk.
+
+        Similar to deployment analysis but focused on PR-specific signals:
+        - Change size and complexity
+        - Database/infrastructure changes
+        - Author history
+        - Service stability
+
+        Returns a DeploymentAnalysis for consistency with the deployment endpoint.
+        """
+        start = time.perf_counter()
+        prompt = build_pr_prompt(context)
+
+        try:
+            result = await self._call_llm(prompt)
+            analysis_data = json.loads(result)
+            latency = (time.perf_counter() - start) * 1000
+
+            logger.info(
+                "ai_pr_analysis_completed",
+                model=self.model,
+                latency_ms=round(latency, 2),
+                pr_number=context.get("pr_number"),
+            )
+
+            return DeploymentAnalysis(
+                summary=analysis_data.get("summary", "PR analysis completed."),
+                risk_explanation=analysis_data.get("risk_explanation", ""),
+                root_causes=analysis_data.get("root_causes", []),
+                recommendations=analysis_data.get("recommendations", []),
+                failure_patterns=analysis_data.get("failure_patterns", []),
+                confidence=0.80,
+                model_used=self.model,
+                latency_ms=round(latency, 2),
+            )
+
+        except Exception as e:
+            latency = (time.perf_counter() - start) * 1000
+            logger.warning(
+                "ai_pr_analysis_fallback",
+                error=str(e),
+                latency_ms=round(latency, 2),
+            )
+            return self._rule_based_pr_analysis(context, latency)
+
     async def _call_llm(self, prompt: str) -> str:
         """Call the LLM API and return the response text."""
+        if not self.api_key or self.api_key == "your-api-key-here":
+            raise ValueError("AI_API_KEY is not configured")
+            
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             response = await client.post(
                 f"{self.api_base}/chat/completions",
@@ -238,8 +340,11 @@ class AIEngine:
                         {
                             "role": "system",
                             "content": (
-                                "You are a deployment risk analysis AI. "
-                                "Respond only with valid JSON."
+                                "You are DeploySense, an expert DevOps and SRE intelligence agent. "
+                                "Your goal is to deeply analyze deployment context, identify root causes for failures, "
+                                "and recommend robust mitigations based on standard DevOps best practices.\n"
+                                "You must respond with ONLY a valid JSON object matching the requested format. "
+                                "Do not include any Markdown formatting, introductory text, or concluding text."
                             ),
                         },
                         {"role": "user", "content": prompt},
@@ -287,68 +392,84 @@ class AIEngine:
         # Generate root causes from factors
         root_causes = []
         for f in factors:
-            root_causes.append({
-                "cause": f.get("description", f.get("name", "Unknown")),
-                "confidence": f.get("contribution", 0.5),
-                "evidence": f"Risk factor: {f.get('name', 'unknown')} "
-                            f"contributing {f.get('contribution', 0):.0%} to overall score",
-            })
+            root_causes.append(
+                {
+                    "cause": f.get("description", f.get("name", "Unknown")),
+                    "confidence": f.get("contribution", 0.5),
+                    "evidence": f"Risk factor: {f.get('name', 'unknown')} "
+                    f"contributing {f.get('contribution', 0):.0%} to overall score",
+                }
+            )
 
         # Generate recommendations
         recommendations = []
         if context.get("has_db_migration"):
-            recommendations.append({
-                "action": "Run migration in a maintenance window with rollback script ready",
-                "priority": "HIGH",
-                "reason": "Database migrations are the #1 cause of deployment failures",
-            })
+            recommendations.append(
+                {
+                    "action": "Run migration in a maintenance window with rollback script ready",
+                    "priority": "HIGH",
+                    "reason": "Database migrations are the #1 cause of deployment failures",
+                }
+            )
         if context.get("has_infra_change"):
-            recommendations.append({
-                "action": "Review infrastructure changes with SRE team before deploying",
-                "priority": "HIGH",
-                "reason": "Infrastructure changes affect service availability",
-            })
+            recommendations.append(
+                {
+                    "action": "Review infrastructure changes with SRE team before deploying",
+                    "priority": "HIGH",
+                    "reason": "Infrastructure changes affect service availability",
+                }
+            )
         if context.get("recent_failure_count", 0) > 0:
-            recommendations.append({
-                "action": "Investigate and resolve recent failures before deploying",
-                "priority": "HIGH",
-                "reason": (
-                    f"{context['recent_failure_count']} recent failures indicate "
-                    "service instability"
-                ),
-            })
+            recommendations.append(
+                {
+                    "action": "Investigate and resolve recent failures before deploying",
+                    "priority": "HIGH",
+                    "reason": (
+                        f"{context['recent_failure_count']} recent failures indicate "
+                        "service instability"
+                    ),
+                }
+            )
         if context.get("files_changed", 0) > 20:
-            recommendations.append({
-                "action": "Consider splitting this deployment into smaller, incremental releases",
-                "priority": "MEDIUM",
-                "reason": f"{context['files_changed']} files changed increases blast radius",
-            })
+            recommendations.append(
+                {
+                    "action": "Consider splitting this deployment into smaller, incremental releases",
+                    "priority": "MEDIUM",
+                    "reason": f"{context['files_changed']} files changed increases blast radius",
+                }
+            )
         if score > 50:
-            recommendations.append({
-                "action": "Enable enhanced monitoring and alerting for this deployment",
-                "priority": "HIGH",
-                "reason": f"Risk score {score} exceeds safety threshold",
-            })
+            recommendations.append(
+                {
+                    "action": "Enable enhanced monitoring and alerting for this deployment",
+                    "priority": "HIGH",
+                    "reason": f"Risk score {score} exceeds safety threshold",
+                }
+            )
 
         # Failure patterns
         failure_patterns = []
         if context.get("has_db_migration"):
-            failure_patterns.append({
-                "pattern": "Migration lock contention",
-                "probability": 0.3,
-                "mitigation": "Use online DDL tools (pt-online-schema-change or gh-ost)",
-            })
+            failure_patterns.append(
+                {
+                    "pattern": "Migration lock contention",
+                    "probability": 0.3,
+                    "mitigation": "Use online DDL tools (pt-online-schema-change or gh-ost)",
+                }
+            )
         if context.get("current_error_rate", 0) > context.get("baseline_error_rate", 0) * 2:
-            failure_patterns.append({
-                "pattern": "Cascading failure from elevated error rate",
-                "probability": 0.4,
-                "mitigation": "Deploy circuit breakers and set error budget alerts",
-            })
+            failure_patterns.append(
+                {
+                    "pattern": "Cascading failure from elevated error rate",
+                    "probability": 0.4,
+                    "mitigation": "Deploy circuit breakers and set error budget alerts",
+                }
+            )
 
         return DeploymentAnalysis(
             summary=summary,
             risk_explanation=f"This deployment has a risk score of {score}/100 ({level}) "
-                           f"with {len(factors)} contributing factor(s).",
+            f"with {len(factors)} contributing factor(s).",
             root_causes=root_causes,
             recommendations=recommendations,
             failure_patterns=failure_patterns,
@@ -358,8 +479,126 @@ class AIEngine:
             risk_score=score,
         )
 
+    def _rule_based_pr_analysis(self, context: dict, latency: float) -> DeploymentAnalysis:
+        """
+        Fallback: Generate PR analysis using rules when LLM is unavailable.
+        """
+        files_changed = context.get("files_changed", 0)
+        has_db_migration = context.get("has_db_migration", False)
+        has_infra_change = context.get("has_infra_change", False)
+        recent_failures = context.get("recent_failure_count", 0)
+
+        # Calculate a simple risk score
+        risk_signals = 0
+        root_causes = []
+        recommendations = []
+        failure_patterns = []
+
+        if has_db_migration:
+            risk_signals += 3
+            root_causes.append(
+                {
+                    "cause": "Database migration detected",
+                    "confidence": 0.8,
+                    "evidence": "Migrations are a leading cause of deployment failures",
+                }
+            )
+            recommendations.append(
+                {
+                    "action": "Review migration for locking concerns and test rollback",
+                    "priority": "HIGH",
+                    "reason": "DB migrations can cause production outages if not carefully planned",
+                }
+            )
+            failure_patterns.append(
+                {
+                    "pattern": "Migration lock contention",
+                    "probability": 0.3,
+                    "mitigation": "Use online DDL tools and run during low-traffic windows",
+                }
+            )
+
+        if has_infra_change:
+            risk_signals += 2
+            root_causes.append(
+                {
+                    "cause": "Infrastructure change detected",
+                    "confidence": 0.7,
+                    "evidence": "Infra changes can affect service availability",
+                }
+            )
+            recommendations.append(
+                {
+                    "action": "Review infrastructure changes with SRE team",
+                    "priority": "HIGH",
+                    "reason": "Infra changes have broad blast radius",
+                }
+            )
+
+        if files_changed > 20:
+            risk_signals += 2
+            root_causes.append(
+                {
+                    "cause": f"Large change size ({files_changed} files)",
+                    "confidence": 0.6,
+                    "evidence": "Large changes are harder to review and more likely to contain bugs",
+                }
+            )
+            recommendations.append(
+                {
+                    "action": "Consider splitting into smaller PRs",
+                    "priority": "MEDIUM",
+                    "reason": f"{files_changed} files is a large change set that increases risk",
+                }
+            )
+
+        if recent_failures > 0:
+            risk_signals += 1
+            root_causes.append(
+                {
+                    "cause": f"Service has {recent_failures} recent failure(s)",
+                    "confidence": 0.5,
+                    "evidence": "Recent failures indicate underlying instability",
+                }
+            )
+            recommendations.append(
+                {
+                    "action": "Investigate recent failures before merging",
+                    "priority": "MEDIUM",
+                    "reason": "Service instability compounds deployment risk",
+                }
+            )
+
+        # Determine risk level summary
+        if risk_signals == 0:
+            summary = "Low-risk PR. No significant risk factors detected."
+            risk_explanation = (
+                "This PR has a small change footprint and no high-risk changes (migrations, infra)."
+            )
+        elif risk_signals <= 2:
+            summary = f"Moderate-risk PR with {len(root_causes)} risk factor(s)."
+            risk_explanation = f"This PR has {len(root_causes)} contributing factor(s) that warrant attention during review."
+        elif risk_signals <= 4:
+            summary = f"High-risk PR with {len(root_causes)} risk factor(s)."
+            risk_explanation = "This PR has significant risk factors that should be carefully reviewed before merging."
+        else:
+            summary = f"Critical-risk PR with {len(root_causes)} risk factor(s)."
+            risk_explanation = "This PR contains multiple high-risk changes. Consider breaking it into smaller PRs."
+
+        return DeploymentAnalysis(
+            summary=summary,
+            risk_explanation=risk_explanation,
+            root_causes=root_causes,
+            recommendations=recommendations,
+            failure_patterns=failure_patterns,
+            confidence=0.75,
+            model_used="rule-based-fallback",
+            latency_ms=round(latency, 2),
+        )
+
 
 # ─── Factory ─────────────────────────────────────────────────────────────────
+
 
 def get_ai_engine() -> AIEngine:
     """Create an AI engine instance from settings."""

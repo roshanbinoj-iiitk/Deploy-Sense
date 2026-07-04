@@ -33,8 +33,6 @@ IMPLEMENTATION:
 """
 
 from enum import Enum
-from functools import wraps
-from typing import Any
 
 from fastapi import Depends, HTTPException, status
 
@@ -46,6 +44,7 @@ logger = get_logger(__name__)
 
 # ─── Permissions ─────────────────────────────────────────────────────────────
 
+
 class Permission(str, Enum):
     """
     All permissions in the system.
@@ -53,6 +52,7 @@ class Permission(str, Enum):
     NAMING: resource:action
     This makes it easy to check "can user do X to Y?"
     """
+
     # Deployments
     DEPLOYMENTS_READ = "deployments:read"
     DEPLOYMENTS_CREATE = "deployments:create"
@@ -138,6 +138,7 @@ ROLE_PERMISSIONS: dict[str, set[Permission]] = {
 
 # ─── Permission Check ───────────────────────────────────────────────────────
 
+
 def has_permission(user: User, permission: Permission) -> bool:
     """Check if a user has a specific permission based on their role."""
     role = user.role or "viewer"
@@ -165,6 +166,7 @@ def check_permission(user: User, permission: Permission) -> None:
 
 
 # ─── FastAPI Dependencies ────────────────────────────────────────────────────
+
 
 def require_permission(permission: Permission):
     """

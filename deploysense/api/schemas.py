@@ -25,23 +25,26 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-
 # ─── Pagination ──────────────────────────────────────────────────────────────
+
 
 class PaginationParams(BaseModel):
     """Query parameters for paginated endpoints."""
+
     page: int = Field(default=1, ge=1, description="Page number")
     per_page: int = Field(default=20, ge=1, le=100, description="Items per page")
 
 
 class PaginationMeta(BaseModel):
     """Pagination metadata in list responses."""
+
     page: int
     per_page: int
     total: int
 
 
 # ─── Deployments ─────────────────────────────────────────────────────────────
+
 
 class DeploymentCreate(BaseModel):
     """
@@ -54,6 +57,7 @@ class DeploymentCreate(BaseModel):
       - git_sha: The exact commit being deployed (immutable reference)
       - deployed_by: Who triggered the deployment
     """
+
     service_name: str = Field(..., min_length=1, max_length=255)
     environment: str = Field(..., min_length=1, max_length=100)
     version: str | None = Field(default=None, max_length=255)
@@ -68,6 +72,7 @@ class DeploymentResponse(BaseModel):
     Includes denormalized risk data so the dashboard doesn't need
     a separate API call to show risk alongside deployment status.
     """
+
     id: uuid.UUID
     service_name: str | None = None
     environment: str
@@ -88,17 +93,20 @@ class DeploymentResponse(BaseModel):
 
 class DeploymentListResponse(BaseModel):
     """Paginated list of deployments."""
+
     data: list[DeploymentResponse]
     pagination: PaginationMeta
 
 
 class DeploymentStatusUpdate(BaseModel):
     """Request body: Update deployment status."""
+
     status: str = Field(..., description="New deployment status")
     message: str | None = Field(default=None, description="Reason for status change")
 
 
 # ─── Risk ────────────────────────────────────────────────────────────────────
+
 
 class RiskEvaluationRequest(BaseModel):
     """
@@ -107,6 +115,7 @@ class RiskEvaluationRequest(BaseModel):
     Sent from API Service to Risk Engine via REST.
     Maps to POST /internal/risk/evaluate in the architecture doc.
     """
+
     deployment_id: uuid.UUID
     service_name: str
     environment: str
@@ -120,6 +129,7 @@ class RiskEvaluationRequest(BaseModel):
 
 class RiskFactor(BaseModel):
     """A single contributing factor to the risk score."""
+
     name: str
     contribution: float = Field(..., ge=0.0, le=1.0)
     description: str | None = None
@@ -135,6 +145,7 @@ class RiskEvaluationResponse(BaseModel):
     They correlate but are computed differently. The score includes
     policy considerations; the probability is purely statistical.
     """
+
     deployment_id: uuid.UUID
     risk_score: int = Field(..., ge=0, le=100)
     risk_level: str
@@ -145,6 +156,7 @@ class RiskEvaluationResponse(BaseModel):
 
 class RiskHistoryResponse(BaseModel):
     """Risk assessment history for a deployment."""
+
     deployment_id: uuid.UUID
     risk_score: int
     risk_level: str
@@ -157,8 +169,10 @@ class RiskHistoryResponse(BaseModel):
 
 # ─── Services ────────────────────────────────────────────────────────────────
 
+
 class ServiceResponse(BaseModel):
     """Response: Service information."""
+
     id: uuid.UUID
     name: str
     environment: str | None = None
@@ -176,6 +190,7 @@ class ServiceHealthResponse(BaseModel):
     Combines the latest metrics snapshot with deployment context.
     Maps to GET /services/{name}/health in the architecture doc.
     """
+
     service: str
     status: str
     current_version: str | None = None
@@ -184,16 +199,20 @@ class ServiceHealthResponse(BaseModel):
 
 # ─── Webhooks ────────────────────────────────────────────────────────────────
 
+
 class WebhookResponse(BaseModel):
     """Response: Webhook received acknowledgement."""
+
     status: str = "received"
     event_id: str | None = None
 
 
 # ─── Alerts ──────────────────────────────────────────────────────────────────
 
+
 class AlertResponse(BaseModel):
     """Response: Alert information."""
+
     id: uuid.UUID
     severity: str | None = None
     title: str | None = None
@@ -207,6 +226,7 @@ class AlertResponse(BaseModel):
 
 # ─── Standard Error ──────────────────────────────────────────────────────────
 
+
 class ErrorResponse(BaseModel):
     """
     Standard error response format.
@@ -214,6 +234,7 @@ class ErrorResponse(BaseModel):
     Maps to section 3.4 of the architecture doc.
     Every error response across all endpoints follows this shape.
     """
+
     code: str
     message: str
     request_id: str | None = None

@@ -5,14 +5,12 @@ Tests the WebSocket connection manager's broadcast behavior.
 """
 
 import json
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from deploysense.api.websocket import (
     ConnectionManager,
-    emit_deployment_created,
-    emit_deployment_updated,
 )
 
 
@@ -58,6 +56,7 @@ class TestConnectionManager:
         ws.client_state.name = "CONNECTED"
         # Patch the enum comparison
         from starlette.websockets import WebSocketState
+
         ws.client_state = WebSocketState.CONNECTED
         mgr._connections.add(ws)
 

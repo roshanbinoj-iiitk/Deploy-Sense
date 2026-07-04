@@ -29,7 +29,6 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from deploysense.database.base import Base, BaseModel
 
-
 # ─── Enums ───────────────────────────────────────────────────────────────────
 # Python enums for type safety. Stored as VARCHAR in PostgreSQL.
 # WHY NOT PostgreSQL enums: Schema migrations to add values require ALTER TYPE
@@ -81,6 +80,7 @@ class AnalysisStatus(str, enum.Enum):
 # WHY: Multi-tenancy boundary. All data is scoped to an organization.
 # Even if we start with a single org, the data model supports multiple.
 
+
 class Organization(BaseModel):
     __tablename__ = "organizations"
 
@@ -95,6 +95,7 @@ class Organization(BaseModel):
 # ─── Users ───────────────────────────────────────────────────────────────────
 # WHY: Track who deploys what. GitHub username is the identity anchor.
 # Role field enables future RBAC without schema migration.
+
 
 class User(BaseModel):
     __tablename__ = "users"
@@ -114,6 +115,7 @@ class User(BaseModel):
 # ─── Repositories ────────────────────────────────────────────────────────────
 # WHY: DeploySense connects to GitHub repos. This tracks which repos
 # are monitored and their sync status.
+
 
 class Repository(BaseModel):
     __tablename__ = "repositories"
@@ -137,6 +139,7 @@ class Repository(BaseModel):
 # E.g., a monorepo with "payments-api" and "payments-worker".
 # Risk scores and deployment tracking are per-service, not per-repo.
 
+
 class Service(BaseModel):
     __tablename__ = "services"
 
@@ -158,6 +161,7 @@ class Service(BaseModel):
 # ─── Pull Requests ───────────────────────────────────────────────────────────
 # WHY: PRs are a primary risk signal. Files changed, lines changed,
 # migration presence, and review coverage all feed into risk scoring.
+
 
 class PullRequest(BaseModel):
     __tablename__ = "pull_requests"
@@ -191,6 +195,7 @@ class PullRequest(BaseModel):
 # TRADEOFF: Status is a VARCHAR, not a PostgreSQL enum. This avoids
 # ALTER TYPE migrations when we add new states (which we will).
 
+
 class Deployment(BaseModel):
     __tablename__ = "deployments"
 
@@ -221,18 +226,22 @@ class Deployment(BaseModel):
     alerts: Mapped[list["Alert"]] = relationship(back_populates="deployment")
     ai_analyses: Mapped[list["AIAnalysis"]] = relationship(back_populates="deployment")
 
+    @property
+    def service_name(self) -> str | None:
+        """Expose the related service name through the deployment API schema."""
+        return self.service.name if self.service else None
+
 
 # ─── Deployment Events ───────────────────────────────────────────────────────
 # WHY: Immutable audit trail. Every state transition is recorded.
 # This is event-sourcing-lite — we can reconstruct the full deployment
 # timeline from these events. Critical for post-incident analysis.
 
+
 class DeploymentEvent(Base):
     __tablename__ = "deployment_events"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     deployment_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("deployments.id"), nullable=True
     )
@@ -240,9 +249,7 @@ class DeploymentEvent(Base):
     previous_state: Mapped[str | None] = mapped_column(String(50), nullable=True)
     current_state: Mapped[str | None] = mapped_column(String(50), nullable=True)
     message: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=func.now(), nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), nullable=False)
 
     # Relationships
     deployment: Mapped[Deployment | None] = relationship(back_populates="events")
@@ -254,12 +261,11 @@ class DeploymentEvent(Base):
 # assessments including the full feature vector and contributing factors.
 # Essential for model training and auditing risk decisions.
 
+
 class RiskAssessment(Base):
     __tablename__ = "risk_assessments"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     deployment_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("deployments.id"), nullable=True
     )
@@ -269,9 +275,7 @@ class RiskAssessment(Base):
     recommendation: Mapped[str | None] = mapped_column(String(100), nullable=True)
     feature_snapshot: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     factors: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=func.now(), nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), nullable=False)
 
     # Relationships
     deployment: Mapped[Deployment | None] = relationship(back_populates="risk_assessments")
@@ -283,12 +287,11 @@ class RiskAssessment(Base):
 # metrics against baselines. Stored in regular PostgreSQL for now —
 # TimescaleDB is a future optimization when volume justifies it.
 
+
 class MetricsSnapshot(Base):
     __tablename__ = "metrics_snapshots"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     service_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("services.id"), nullable=True
     )
@@ -310,6 +313,7 @@ class MetricsSnapshot(Base):
 # after a deploy, the alert links to both the service AND the deployment.
 # This correlation is what makes DeploySense an intelligence platform
 # rather than just another dashboard.
+
 
 class Alert(BaseModel):
     __tablename__ = "alerts"
@@ -339,6 +343,7 @@ class Alert(BaseModel):
 #   2. Optional (not every deployment gets AI analysis)
 #   3. Uses a different data model (free-text summary + structured JSON)
 
+
 class AIAnalysis(BaseModel):
     __tablename__ = "ai_analyses"
 
@@ -364,12 +369,11 @@ class AIAnalysis(BaseModel):
 # WHY: Immutable audit trail for compliance, incident response, and debugging.
 # Append-only — no UPDATE or DELETE operations allowed.
 
+
 class AuditLog(Base):
     __tablename__ = "audit_logs"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     action: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     actor_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), nullable=True, index=True
@@ -388,6 +392,7 @@ class AuditLog(Base):
 # WHY: Track SLOs per service. Maps to architecture/07-observability.md 7.10.
 # Used by the SLO monitoring dashboard to show burn rate and error budget.
 
+
 class ServiceSLO(BaseModel):
     __tablename__ = "service_slos"
 
@@ -399,8 +404,9 @@ class ServiceSLO(BaseModel):
     metric_query: Mapped[str | None] = mapped_column(Text, nullable=True)
     window_days: Mapped[int] = mapped_column(Integer, default=30)
     current_value: Mapped[float | None] = mapped_column(Numeric(6, 4), nullable=True)
-    status: Mapped[str] = mapped_column(String(50), default="MEETING")  # MEETING / BREACHING / AT_RISK
+    status: Mapped[str] = mapped_column(
+        String(50), default="MEETING"
+    )  # MEETING / BREACHING / AT_RISK
 
     # Relationships
     service: Mapped[Service] = relationship()
-

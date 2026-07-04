@@ -9,7 +9,7 @@ const riskStyles: Record<RiskLevel, { bg: string; text: string; border: string }
 };
 
 export function RiskBadge({ level, score }: { level: RiskLevel; score?: number | null }) {
-  const style = riskStyles[level];
+  const style = riskStyles[level] || { bg: 'bg-slate-500/8', text: 'text-slate-400', border: 'border-slate-500/15' };
   return (
     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-semibold tracking-wide ${style.bg} ${style.text} ${style.border}`}>
       {score !== undefined && score !== null && <span className="font-mono font-bold">{score}</span>}

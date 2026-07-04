@@ -12,13 +12,17 @@ import type {
   RiskAssessment,
   Service,
   TimelineEvent,
+  AnalysisResponse,
 } from './types';
 
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? '';
+const BASE = typeof window === 'undefined' 
+  ? (process.env.INTERNAL_API_URL || 'http://127.0.0.1:8000')
+  : (process.env.NEXT_PUBLIC_API_URL || '');
 
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
-    next: { revalidate: 15 }, // ISR: revalidate every 15s
+    cache: 'no-store',
+    signal: AbortSignal.timeout(5_000),
   });
   if (!res.ok) throw new Error(`API ${path} → ${res.status}`);
   return res.json() as Promise<T>;
@@ -75,4 +79,21 @@ export async function getDashboardAlerts(): Promise<Alert[]> {
   } catch {
     return [];
   }
+}
+
+// ── AI Analysis ──────────────────────────────────────────────────────────────
+
+export async function analyzeDeployment(deploymentId: string): Promise<AnalysisResponse> {
+  const res = await fetch(`${BASE}/api/v1/ai/analyze/deployment`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ deployment_id: deploymentId }),
+    cache: 'no-store',
+  });
+  if (!res.ok) throw new Error(`API /api/v1/ai/analyze/deployment → ${res.status}`);
+  return res.json() as Promise<AnalysisResponse>;
+}
+
+export async function getAnalysis(id: string): Promise<AnalysisResponse> {
+  return get<AnalysisResponse>(`/api/v1/ai/analyses/${id}`);
 }

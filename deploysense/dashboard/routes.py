@@ -49,6 +49,7 @@ def _database_unavailable_context(page: str, exc: Exception) -> dict:
 
 # ─── Dashboard: Overview ─────────────────────────────────────────────────────
 
+
 @router.get("/dashboard", response_class=HTMLResponse)
 async def dashboard_overview(
     request: Request,
@@ -96,40 +97,47 @@ async def dashboard_overview(
 
         # Recent deployments
         recent_result = await db.execute(
-            select(Deployment)
-            .order_by(Deployment.created_at.desc())
-            .limit(10)
+            select(Deployment).order_by(Deployment.created_at.desc()).limit(10)
         )
         recent_deployments = recent_result.scalars().all()
     except Exception as exc:
         fallback = _database_unavailable_context("overview", exc)
-        return templates.TemplateResponse(request, "overview.html", {
-            "request": request,
-            "total_deployments": 0,
-            "stable_deployments": 0,
-            "failed_deployments": 0,
-            "active_deployments": 0,
-            "open_alerts": 0,
-            "success_rate": 0,
-            "recent_deployments": [],
-            **fallback,
-        })
+        return templates.TemplateResponse(
+            request,
+            "overview.html",
+            {
+                "request": request,
+                "total_deployments": 0,
+                "stable_deployments": 0,
+                "failed_deployments": 0,
+                "active_deployments": 0,
+                "open_alerts": 0,
+                "success_rate": 0,
+                "recent_deployments": [],
+                **fallback,
+            },
+        )
 
     success_rate = round((stable / total_deploys * 100), 1) if total_deploys > 0 else 0
 
-    return templates.TemplateResponse(request, "overview.html", {
-        "request": request,
-        "total_deployments": total_deploys,
-        "stable_deployments": stable,
-        "failed_deployments": failed,
-        "active_deployments": active,
-        "open_alerts": open_alerts,
-        "success_rate": success_rate,
-        "recent_deployments": recent_deployments,
-    })
+    return templates.TemplateResponse(
+        request,
+        "overview.html",
+        {
+            "request": request,
+            "total_deployments": total_deploys,
+            "stable_deployments": stable,
+            "failed_deployments": failed,
+            "active_deployments": active,
+            "open_alerts": open_alerts,
+            "success_rate": success_rate,
+            "recent_deployments": recent_deployments,
+        },
+    )
 
 
 # ─── Dashboard: Deployments ──────────────────────────────────────────────────
+
 
 @router.get("/dashboard/deployments", response_class=HTMLResponse)
 async def dashboard_deployments(
@@ -162,20 +170,25 @@ async def dashboard_deployments(
         total = 0
         deployments = []
 
-    return templates.TemplateResponse(request, "deployments.html", {
-        "request": request,
-        "deployments": deployments,
-        "total": total,
-        "page": page,
-        "per_page": per_page,
-        "status_filter": status,
-        "environment_filter": environment,
-        "total_pages": max(1, (total + per_page - 1) // per_page),
-        **fallback,
-    })
+    return templates.TemplateResponse(
+        request,
+        "deployments.html",
+        {
+            "request": request,
+            "deployments": deployments,
+            "total": total,
+            "page": page,
+            "per_page": per_page,
+            "status_filter": status,
+            "environment_filter": environment,
+            "total_pages": max(1, (total + per_page - 1) // per_page),
+            **fallback,
+        },
+    )
 
 
 # ─── Dashboard: Deployment Detail ────────────────────────────────────────────
+
 
 @router.get("/dashboard/deployments/{deployment_id}", response_class=HTMLResponse)
 async def dashboard_deployment_detail(
@@ -186,9 +199,7 @@ async def dashboard_deployment_detail(
     """Deployment detail page with timeline and risk assessment."""
     fallback = {}
     try:
-        result = await db.execute(
-            select(Deployment).where(Deployment.id == deployment_id)
-        )
+        result = await db.execute(select(Deployment).where(Deployment.id == deployment_id))
         deployment = result.scalar_one_or_none()
 
         # Timeline events
@@ -212,16 +223,21 @@ async def dashboard_deployment_detail(
         events = []
         risks = []
 
-    return templates.TemplateResponse(request, "deployment_detail.html", {
-        "request": request,
-        "deployment": deployment,
-        "events": events,
-        "risks": risks,
-        **fallback,
-    })
+    return templates.TemplateResponse(
+        request,
+        "deployment_detail.html",
+        {
+            "request": request,
+            "deployment": deployment,
+            "events": events,
+            "risks": risks,
+            **fallback,
+        },
+    )
 
 
 # ─── Dashboard: Services ─────────────────────────────────────────────────────
+
 
 @router.get("/dashboard/services", response_class=HTMLResponse)
 async def dashboard_services(
@@ -237,14 +253,19 @@ async def dashboard_services(
         fallback = _database_unavailable_context("services", exc)
         services = []
 
-    return templates.TemplateResponse(request, "services.html", {
-        "request": request,
-        "services": services,
-        **fallback,
-    })
+    return templates.TemplateResponse(
+        request,
+        "services.html",
+        {
+            "request": request,
+            "services": services,
+            **fallback,
+        },
+    )
 
 
 # ─── Dashboard: Risk Analysis ────────────────────────────────────────────────
+
 
 @router.get("/dashboard/risk", response_class=HTMLResponse)
 async def dashboard_risk(
@@ -256,9 +277,7 @@ async def dashboard_risk(
     try:
         # Recent risk assessments
         recent_result = await db.execute(
-            select(RiskAssessment)
-            .order_by(RiskAssessment.created_at.desc())
-            .limit(50)
+            select(RiskAssessment).order_by(RiskAssessment.created_at.desc()).limit(50)
         )
         recent_risks = recent_result.scalars().all()
     except Exception as exc:
@@ -272,20 +291,24 @@ async def dashboard_risk(
 
     # Average score
     avg_score = (
-        round(sum(r.risk_score for r in recent_risks) / len(recent_risks), 1)
-        if recent_risks else 0
+        round(sum(r.risk_score for r in recent_risks) / len(recent_risks), 1) if recent_risks else 0
     )
 
-    return templates.TemplateResponse(request, "risk.html", {
-        "request": request,
-        "recent_risks": recent_risks,
-        "distribution": distribution,
-        "avg_score": avg_score,
-        **fallback,
-    })
+    return templates.TemplateResponse(
+        request,
+        "risk.html",
+        {
+            "request": request,
+            "recent_risks": recent_risks,
+            "distribution": distribution,
+            "avg_score": avg_score,
+            **fallback,
+        },
+    )
 
 
 # ─── Dashboard: Alerts ──────────────────────────────────────────────────────
+
 
 @router.get("/dashboard/alerts", response_class=HTMLResponse)
 async def dashboard_alerts(
@@ -305,9 +328,7 @@ async def dashboard_alerts(
         alerts = result.scalars().all()
 
         # Counts by status
-        open_result = await db.execute(
-            select(func.count(Alert.id)).where(Alert.status == "OPEN")
-        )
+        open_result = await db.execute(select(func.count(Alert.id)).where(Alert.status == "OPEN"))
         ack_result = await db.execute(
             select(func.count(Alert.id)).where(Alert.status == "ACKNOWLEDGED")
         )
@@ -319,11 +340,15 @@ async def dashboard_alerts(
         open_count = 0
         acknowledged_count = 0
 
-    return templates.TemplateResponse(request, "alerts.html", {
-        "request": request,
-        "alerts": alerts,
-        "status_filter": status,
-        "open_count": open_count,
-        "acknowledged_count": acknowledged_count,
-        **fallback,
-    })
+    return templates.TemplateResponse(
+        request,
+        "alerts.html",
+        {
+            "request": request,
+            "alerts": alerts,
+            "status_filter": status,
+            "open_count": open_count,
+            "acknowledged_count": acknowledged_count,
+            **fallback,
+        },
+    )

@@ -46,6 +46,15 @@ export interface Service {
   created_at: string;
 }
 
+export interface Repository {
+  id: string;
+  owner: string;
+  repository_name: string;
+  default_branch: string;
+  status: string;
+  created_at: string;
+}
+
 export interface Alert {
   id: string;
   severity: AlertSeverity | null;
@@ -78,5 +87,38 @@ export interface RiskAssessment {
   risk_level: RiskLevel;
   failure_probability: number | null;
   recommendation: string | null;
+  created_at: string;
+}
+
+export interface RootCause {
+  cause: string;
+  confidence: number;
+  evidence: string;
+}
+
+export interface Recommendation {
+  action: string;
+  priority: 'HIGH' | 'MEDIUM' | 'LOW';
+  reason: string;
+}
+
+export interface FailurePattern {
+  pattern: string;
+  probability: number;
+  mitigation: string;
+}
+
+export interface AnalysisResponse {
+  id: string;
+  deployment_id: string | null;
+  status: string;
+  analysis_type: string;
+  summary: string | null;
+  risk_explanation: string | null;
+  root_causes: RootCause[] | null;
+  recommendations: Recommendation[] | null;
+  failure_patterns: FailurePattern[] | null;
+  confidence: number | null;
+  model_used: string | null;
   created_at: string;
 }

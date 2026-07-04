@@ -17,7 +17,7 @@ PERFORMANCE:
   Features are cached in Redis for 5 minutes to avoid repeated queries.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -45,7 +45,7 @@ async def collect_historical_features(
       - current_error_rate: Latest metrics snapshot
       - baseline_error_rate: Average error rate over last 7 days
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     features: dict = {
         "recent_failure_count": 0,
         "deployments_last_24h": 0,
@@ -60,8 +60,7 @@ async def collect_historical_features(
     try:
         # ── Recent Failures (last 7 days) ────────────────────────────────
         failure_result = await db.execute(
-            select(func.count(Deployment.id))
-            .where(
+            select(func.count(Deployment.id)).where(
                 Deployment.service_id == service_id,
                 Deployment.status.in_(["FAILED", "ROLLED_BACK"]),
                 Deployment.created_at >= now - timedelta(days=7),
@@ -71,8 +70,7 @@ async def collect_historical_features(
 
         # ── Deployment Frequency (last 24h) ──────────────────────────────
         freq_result = await db.execute(
-            select(func.count(Deployment.id))
-            .where(
+            select(func.count(Deployment.id)).where(
                 Deployment.service_id == service_id,
                 Deployment.created_at >= now - timedelta(hours=24),
             )
@@ -80,9 +78,7 @@ async def collect_historical_features(
         features["deployments_last_24h"] = freq_result.scalar() or 0
 
         # ── Service Stability Score ──────────────────────────────────────
-        svc_result = await db.execute(
-            select(Service).where(Service.id == service_id)
-        )
+        svc_result = await db.execute(select(Service).where(Service.id == service_id))
         service = svc_result.scalar_one_or_none()
         if service:
             features["service_stability_score"] = service.stability_score or 100
@@ -100,8 +96,7 @@ async def collect_historical_features(
 
         # ── Baseline Error Rate (7-day average) ──────────────────────────
         baseline_result = await db.execute(
-            select(func.avg(MetricsSnapshot.error_rate))
-            .where(
+            select(func.avg(MetricsSnapshot.error_rate)).where(
                 MetricsSnapshot.service_id == service_id,
                 MetricsSnapshot.collected_at >= now - timedelta(days=7),
             )
@@ -142,15 +137,14 @@ async def update_service_stability(db: AsyncSession, service_id: str) -> int:
     It decays with failures and recovers with successful deployments.
     Used by the Risk Engine and the dashboard health view.
     """
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     thirty_days_ago = now - timedelta(days=30)
 
     score = 100
 
     # Failures
     fail_result = await db.execute(
-        select(func.count(Deployment.id))
-        .where(
+        select(func.count(Deployment.id)).where(
             Deployment.service_id == service_id,
             Deployment.status == "FAILED",
             Deployment.created_at >= thirty_days_ago,
@@ -161,8 +155,7 @@ async def update_service_stability(db: AsyncSession, service_id: str) -> int:
 
     # Rollbacks
     rollback_result = await db.execute(
-        select(func.count(Deployment.id))
-        .where(
+        select(func.count(Deployment.id)).where(
             Deployment.service_id == service_id,
             Deployment.status == "ROLLED_BACK",
             Deployment.created_at >= thirty_days_ago,
@@ -173,8 +166,7 @@ async def update_service_stability(db: AsyncSession, service_id: str) -> int:
 
     # Successful deployments (bonus, capped)
     stable_result = await db.execute(
-        select(func.count(Deployment.id))
-        .where(
+        select(func.count(Deployment.id)).where(
             Deployment.service_id == service_id,
             Deployment.status == "STABLE",
             Deployment.created_at >= thirty_days_ago,
@@ -186,9 +178,7 @@ async def update_service_stability(db: AsyncSession, service_id: str) -> int:
     score = max(0, min(100, score))
 
     # Update service record
-    svc_result = await db.execute(
-        select(Service).where(Service.id == service_id)
-    )
+    svc_result = await db.execute(select(Service).where(Service.id == service_id))
     service = svc_result.scalar_one_or_none()
     if service:
         service.stability_score = score

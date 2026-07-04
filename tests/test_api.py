@@ -25,6 +25,7 @@ def client():
     """
     # Lazy import to avoid DB connection on import
     from deploysense.api.main import app
+
     with TestClient(app) as c:
         yield c
 

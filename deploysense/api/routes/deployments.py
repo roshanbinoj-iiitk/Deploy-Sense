@@ -25,12 +25,12 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from deploysense.api.schemas import (
     DeploymentCreate,
     DeploymentListResponse,
     DeploymentResponse,
-    DeploymentStatusUpdate,
     PaginationMeta,
     RiskHistoryResponse,
 )
@@ -44,6 +44,7 @@ router = APIRouter()
 
 
 # ─── GET /deployments ────────────────────────────────────────────────────────
+
 
 @router.get("/deployments", response_model=DeploymentListResponse)
 async def list_deployments(
@@ -75,7 +76,9 @@ async def list_deployments(
     total = total_result.scalar() or 0
 
     # Fetch page
-    query = query.order_by(Deployment.created_at.desc())
+    query = query.options(selectinload(Deployment.service)).order_by(
+        Deployment.created_at.desc()
+    )
     query = query.offset((page - 1) * per_page).limit(per_page)
     result = await db.execute(query)
     deployments = result.scalars().all()
@@ -87,6 +90,7 @@ async def list_deployments(
 
 
 # ─── POST /deployments ──────────────────────────────────────────────────────
+
 
 @router.post("/deployments", response_model=DeploymentResponse, status_code=201)
 async def create_deployment(
@@ -114,7 +118,7 @@ async def create_deployment(
     service = service_result.scalar_one_or_none()
 
     deployment = Deployment(
-        service_id=service.id if service else None,
+        service=service,
         environment=body.environment,
         version=body.version,
         git_sha=body.git_sha,
@@ -147,7 +151,8 @@ async def create_deployment(
 
 # ─── GET /deployments/{id} ───────────────────────────────────────────────────
 
-@router.get("/deployments/{deployment_id}", response_model=DeploymentResponse)
+
+@router.get("/deployments/{deployment_id:uuid}", response_model=DeploymentResponse)
 async def get_deployment(
     deployment_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
@@ -158,7 +163,9 @@ async def get_deployment(
     FAILURE: Returns 404 if deployment not found.
     """
     result = await db.execute(
-        select(Deployment).where(Deployment.id == deployment_id)
+        select(Deployment)
+        .options(selectinload(Deployment.service))
+        .where(Deployment.id == deployment_id)
     )
     deployment = result.scalar_one_or_none()
 
@@ -170,7 +177,8 @@ async def get_deployment(
 
 # ─── GET /deployments/{id}/risk ──────────────────────────────────────────────
 
-@router.get("/deployments/{deployment_id}/risk", response_model=list[RiskHistoryResponse])
+
+@router.get("/deployments/{deployment_id:uuid}/risk", response_model=list[RiskHistoryResponse])
 async def get_deployment_risk(
     deployment_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
@@ -186,9 +194,7 @@ async def get_deployment_risk(
     Initial assessment, re-assessment after PR update, manual override.
     """
     # Verify deployment exists
-    deploy_result = await db.execute(
-        select(Deployment).where(Deployment.id == deployment_id)
-    )
+    deploy_result = await db.execute(select(Deployment).where(Deployment.id == deployment_id))
     if not deploy_result.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Deployment not found")
 
@@ -204,7 +210,8 @@ async def get_deployment_risk(
 
 # ─── POST /deployments/{id}/approve ──────────────────────────────────────────
 
-@router.post("/deployments/{deployment_id}/approve", response_model=DeploymentResponse)
+
+@router.post("/deployments/{deployment_id:uuid}/approve", response_model=DeploymentResponse)
 async def approve_deployment(
     deployment_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
@@ -222,9 +229,7 @@ async def approve_deployment(
       - 404: Deployment not found
       - 409: Deployment is not in a state that can be approved
     """
-    result = await db.execute(
-        select(Deployment).where(Deployment.id == deployment_id)
-    )
+    result = await db.execute(select(Deployment).where(Deployment.id == deployment_id))
     deployment = result.scalar_one_or_none()
 
     if not deployment:
@@ -236,12 +241,13 @@ async def approve_deployment(
             detail=f"Cannot approve deployment in {deployment.status} state",
         )
 
+    previous_status = deployment.status
     deployment.status = "APPROVED"
 
     event = DeploymentEvent(
         deployment_id=deployment.id,
         event_type="deployment.approved",
-        previous_state=deployment.status,
+        previous_state=previous_status,
         current_state="APPROVED",
         message="Deployment manually approved",
     )
@@ -253,6 +259,7 @@ async def approve_deployment(
 
 
 # ─── GET /deployments/stats ──────────────────────────────────────────────────
+
 
 @router.get("/deployments/stats")
 async def deployment_stats(
@@ -276,9 +283,7 @@ async def deployment_stats(
     stable = stable_result.scalar() or 0
 
     failed_result = await db.execute(
-        select(func.count(Deployment.id)).where(
-            Deployment.status.in_(["FAILED", "ROLLED_BACK"])
-        )
+        select(func.count(Deployment.id)).where(Deployment.status.in_(["FAILED", "ROLLED_BACK"]))
     )
     failed = failed_result.scalar() or 0
 
@@ -292,7 +297,8 @@ async def deployment_stats(
 
 # ─── GET /deployments/{id}/timeline ──────────────────────────────────────────
 
-@router.get("/deployments/{deployment_id}/timeline")
+
+@router.get("/deployments/{deployment_id:uuid}/timeline")
 async def get_deployment_timeline(
     deployment_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
@@ -312,9 +318,7 @@ async def get_deployment_timeline(
     a flat list with formatted timestamps and clear messages.
     """
     # Verify deployment exists
-    deploy_result = await db.execute(
-        select(Deployment).where(Deployment.id == deployment_id)
-    )
+    deploy_result = await db.execute(select(Deployment).where(Deployment.id == deployment_id))
     if not deploy_result.scalar_one_or_none():
         raise HTTPException(status_code=404, detail="Deployment not found")
 
@@ -340,7 +344,8 @@ async def get_deployment_timeline(
 
 # ─── POST /deployments/{id}/rollback ────────────────────────────────────────
 
-@router.post("/deployments/{deployment_id}/rollback", response_model=DeploymentResponse)
+
+@router.post("/deployments/{deployment_id:uuid}/rollback", response_model=DeploymentResponse)
 async def rollback_deployment(
     deployment_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
@@ -372,9 +377,7 @@ async def rollback_deployment(
       ROLLED_BACK (already rolled back)
       FAILED (already failed)
     """
-    result = await db.execute(
-        select(Deployment).where(Deployment.id == deployment_id)
-    )
+    result = await db.execute(select(Deployment).where(Deployment.id == deployment_id))
     deployment = result.scalar_one_or_none()
 
     if not deployment:
@@ -385,7 +388,7 @@ async def rollback_deployment(
         raise HTTPException(
             status_code=409,
             detail=f"Cannot rollback deployment in {deployment.status} state. "
-                   f"Rollback is allowed from: {', '.join(sorted(rollback_allowed))}",
+            f"Rollback is allowed from: {', '.join(sorted(rollback_allowed))}",
         )
 
     previous_status = deployment.status
@@ -412,7 +415,8 @@ async def rollback_deployment(
 
 # ─── POST /deployments/{id}/evaluate-risk ────────────────────────────────────
 
-@router.post("/deployments/{deployment_id}/evaluate-risk")
+
+@router.post("/deployments/{deployment_id:uuid}/evaluate-risk")
 async def evaluate_deployment_risk(
     deployment_id: uuid.UUID,
     db: AsyncSession = Depends(get_db_session),
@@ -425,9 +429,10 @@ async def evaluate_deployment_risk(
     Risk Engine via REST (architecture/02-microservices.md section 2.4).
 
     FLOW:
-      1. Look up the deployment and related PR data
-      2. Call POST /internal/risk/evaluate on the Risk Engine
-      3. Return the risk evaluation result
+      1. Look up the deployment and its service
+      2. Look up related PR data for risk features (files changed, migrations)
+      3. Call POST /internal/risk/evaluate on the Risk Engine
+      4. Return the risk evaluation result
 
     WHY A PROXY:
       - API Service handles auth, Risk Engine doesn't
@@ -441,18 +446,56 @@ async def evaluate_deployment_risk(
     import httpx
 
     from deploysense.core import get_settings
+    from deploysense.models import PullRequest
 
-    result = await db.execute(
-        select(Deployment).where(Deployment.id == deployment_id)
-    )
+    result = await db.execute(select(Deployment).where(Deployment.id == deployment_id))
     deployment = result.scalar_one_or_none()
 
     if not deployment:
         raise HTTPException(status_code=404, detail="Deployment not found")
 
-    # Gather PR data for risk features
-    # TODO: Look up related PRs for files_changed, migration detection
+    # ── Resolve service name from service_id ─────────────────────────────
+    service_name = "unknown"
+    repository_id = None
 
+    if deployment.service_id:
+        svc_result = await db.execute(select(Service).where(Service.id == deployment.service_id))
+        service = svc_result.scalar_one_or_none()
+        if service:
+            service_name = service.name
+            repository_id = service.repository_id
+
+    # ── Look up related PR data for risk features ────────────────────────
+    # Find the most recent merged PR in this repository to gather
+    # files_changed, lines_added/deleted, migration and infra flags.
+    # These are the primary static risk signals.
+    files_changed = None
+    lines_added = None
+    lines_deleted = None
+    has_db_migration = False
+    has_infra_change = False
+
+    if repository_id:
+        pr_result = await db.execute(
+            select(PullRequest)
+            .where(
+                PullRequest.repository_id == repository_id,
+                PullRequest.state == "closed",
+                PullRequest.merged_at.isnot(None),
+            )
+            .order_by(PullRequest.merged_at.desc())
+            .limit(1)
+        )
+        latest_pr = pr_result.scalar_one_or_none()
+
+        if latest_pr:
+            files_changed = latest_pr.files_changed
+            lines_added = latest_pr.lines_added
+            lines_deleted = latest_pr.lines_deleted
+            has_db_migration = latest_pr.has_db_migration or False
+            has_infra_change = latest_pr.has_infra_change or False
+
+    # ── Call the Risk Engine ─────────────────────────────────────────────
     settings = get_settings()
 
     try:
@@ -461,28 +504,27 @@ async def evaluate_deployment_risk(
                 f"{settings.risk_engine_url}/internal/risk/evaluate",
                 json={
                     "deployment_id": str(deployment.id),
-                    "service_name": "unknown",  # TODO: resolve from service_id
+                    "service_name": service_name,
                     "environment": deployment.environment,
                     "git_sha": deployment.git_sha,
-                    "files_changed": None,
-                    "lines_added": None,
-                    "lines_deleted": None,
-                    "has_db_migration": False,
-                    "has_infra_change": False,
+                    "files_changed": files_changed,
+                    "lines_added": lines_added,
+                    "lines_deleted": lines_deleted,
+                    "has_db_migration": has_db_migration,
+                    "has_infra_change": has_infra_change,
                 },
                 timeout=5.0,
             )
             response.raise_for_status()
             return response.json()
 
-    except httpx.ConnectError:
+    except httpx.ConnectError as exc:
         raise HTTPException(
             status_code=502,
-            detail="Risk Engine is unavailable. Ensure it's running on "
-                   f"{settings.risk_engine_url}",
-        )
+            detail=f"Risk Engine is unavailable. Ensure it's running on {settings.risk_engine_url}",
+        ) from exc
     except httpx.HTTPStatusError as e:
         raise HTTPException(
             status_code=502,
             detail=f"Risk Engine returned error: {e.response.status_code}",
-        )
+        ) from e

@@ -23,6 +23,7 @@ ALTERNATIVES CONSIDERED:
 
 from functools import lru_cache
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -45,9 +46,7 @@ class Settings(BaseSettings):
     database_url: str = (
         "postgresql+asyncpg://deploysense:deploysense_dev@localhost:5432/deploysense"
     )
-    database_url_sync: str = (
-        "postgresql://deploysense:deploysense_dev@localhost:5432/deploysense"
-    )
+    database_url_sync: str = "postgresql://deploysense:deploysense_dev@localhost:5432/deploysense"
     database_pool_size: int = 20
     database_max_overflow: int = 10
 
@@ -69,6 +68,7 @@ class Settings(BaseSettings):
     risk_engine_url: str = "http://localhost:8001"
 
     # ─── Observability ───────────────────────────────────────────────────
+    prometheus_url: str = "http://localhost:9090"
     otel_service_name: str = "deploysense"
     otel_exporter_otlp_endpoint: str = "http://localhost:4317"
     otel_traces_enabled: bool = False
@@ -77,6 +77,23 @@ class Settings(BaseSettings):
     ai_api_base: str = "https://api.openai.com/v1"
     ai_api_key: str = ""
     ai_model: str = "gpt-4o-mini"
+
+    @field_validator("debug", mode="before")
+    @classmethod
+    def parse_debug_flag(cls, value: object) -> object:
+        """Ignore common non-boolean DEBUG values injected by shells and IDEs."""
+        if isinstance(value, str) and value.lower() not in {
+            "1",
+            "0",
+            "true",
+            "false",
+            "yes",
+            "no",
+            "on",
+            "off",
+        }:
+            return False
+        return value
 
     @property
     def is_production(self) -> bool:

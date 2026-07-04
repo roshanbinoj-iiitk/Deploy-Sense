@@ -29,12 +29,13 @@ SECURITY:
   - HMAC-SHA256 signing (not RSA — simpler for single-service auth)
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import httpx
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
+from pydantic import BaseModel
 
 from deploysense.core import get_settings
 from deploysense.logging import get_logger
@@ -49,7 +50,19 @@ ACCESS_TOKEN_EXPIRE_HOURS = 1
 security = HTTPBearer(auto_error=False)
 
 
+class AuthenticatedUser(BaseModel):
+    """Small authenticated identity shared by API and RBAC dependencies."""
+
+    id: str
+    github_username: str
+    email: str | None = None
+    avatar_url: str | None = None
+    role: str = "engineer"
+    organization_id: str | None = None
+
+
 # ─── JWT Token Operations ───────────────────────────────────────────────────
+
 
 def create_access_token(user_id: str, github_username: str) -> str:
     """
@@ -66,7 +79,7 @@ def create_access_token(user_id: str, github_username: str) -> str:
       just to log "who did this". exp prevents token reuse after compromise.
     """
     settings = get_settings()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     payload = {
         "sub": user_id,
@@ -91,6 +104,7 @@ def decode_access_token(token: str) -> dict:
 
 
 # ─── GitHub OAuth ────────────────────────────────────────────────────────────
+
 
 async def exchange_github_code(code: str) -> dict:
     """
@@ -155,9 +169,10 @@ async def fetch_github_user(access_token: str) -> dict:
 
 # ─── FastAPI Dependency: Get Current User ────────────────────────────────────
 
+
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
-) -> dict:
+) -> AuthenticatedUser:
     """
     FastAPI dependency that extracts and validates the current user.
 
@@ -194,7 +209,7 @@ async def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=f"Invalid token: {e}",
-        )
+        ) from e
 
     # Import here to avoid circular imports
     from deploysense.api.routes.auth import _users
@@ -213,12 +228,12 @@ async def get_current_user(
         }
         _users[github_username or "unknown"] = user
 
-    return user
+    return AuthenticatedUser.model_validate(user)
 
 
 async def get_optional_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(security),
-) -> dict | None:
+) -> AuthenticatedUser | None:
     """
     Like get_current_user but returns None instead of raising 401.
 

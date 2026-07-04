@@ -25,7 +25,7 @@ from deploysense.api.audit import AuditAction, query_audit_logs, record_audit
 from deploysense.api.rbac import Permission, require_permission, require_role
 from deploysense.database import get_db_session
 from deploysense.logging import get_logger
-from deploysense.models import AuditLog, Service, ServiceSLO, User
+from deploysense.models import Service, ServiceSLO, User
 
 logger = get_logger(__name__)
 
@@ -33,6 +33,7 @@ router = APIRouter()
 
 
 # ─── Schemas ─────────────────────────────────────────────────────────────────
+
 
 class UserResponse(BaseModel):
     id: uuid.UUID
@@ -84,6 +85,7 @@ class SLOResponse(BaseModel):
 
 # ─── GET /admin/users ────────────────────────────────────────────────────────
 
+
 @router.get("/admin/users", response_model=list[UserResponse])
 async def list_users(
     user: User = Depends(require_role("admin")),
@@ -96,6 +98,7 @@ async def list_users(
 
 
 # ─── PATCH /admin/users/{id}/role ────────────────────────────────────────────
+
 
 @router.patch("/admin/users/{user_id}/role", response_model=UserResponse)
 async def update_user_role(
@@ -151,6 +154,7 @@ async def update_user_role(
 
 # ─── GET /admin/audit ────────────────────────────────────────────────────────
 
+
 @router.get("/admin/audit", response_model=list[AuditLogResponse])
 async def get_audit_logs(
     user: User = Depends(require_permission(Permission.AUDIT_READ)),
@@ -178,6 +182,7 @@ async def get_audit_logs(
 
 # ─── GET /admin/slos ─────────────────────────────────────────────────────────
 
+
 @router.get("/admin/slos", response_model=list[SLOResponse])
 async def list_slos(
     user: User = Depends(require_permission(Permission.SERVICES_READ)),
@@ -190,6 +195,7 @@ async def list_slos(
 
 
 # ─── POST /admin/slos ────────────────────────────────────────────────────────
+
 
 @router.post("/admin/slos", response_model=SLOResponse, status_code=201)
 async def create_slo(
@@ -204,9 +210,7 @@ async def create_slo(
       POST /admin/slos
       {"service_name": "payments-api", "name": "Availability", "target": 99.90}
     """
-    svc_result = await db.execute(
-        select(Service).where(Service.name == body.service_name)
-    )
+    svc_result = await db.execute(select(Service).where(Service.name == body.service_name))
     service = svc_result.scalar_one_or_none()
     if not service:
         raise HTTPException(status_code=404, detail=f"Service '{body.service_name}' not found")

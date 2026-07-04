@@ -31,7 +31,7 @@ failure probability increases sharply for high-risk deployments.
 
 import math
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime
 
 from deploysense.logging import get_logger
 
@@ -57,6 +57,7 @@ WEIGHTS = {
 
 
 # ─── Data Classes ────────────────────────────────────────────────────────────
+
 
 class RiskFeatures:
     """
@@ -95,9 +96,11 @@ class RiskFeatures:
         self.current_error_rate = current_error_rate
         self.baseline_error_rate = baseline_error_rate
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         self.deploy_hour_utc = deploy_hour_utc if deploy_hour_utc is not None else now.hour
-        self.deploy_day_of_week = deploy_day_of_week if deploy_day_of_week is not None else now.weekday()
+        self.deploy_day_of_week = (
+            deploy_day_of_week if deploy_day_of_week is not None else now.weekday()
+        )
 
 
 class RiskFactor:
@@ -140,6 +143,7 @@ class RiskResult:
 
 # ─── Enhanced Risk Scoring Engine ────────────────────────────────────────────
 
+
 def compute_enhanced_risk(features: RiskFeatures) -> RiskResult:
     """
     Compute deployment risk using the enhanced heuristic model.
@@ -159,32 +163,34 @@ def compute_enhanced_risk(features: RiskFeatures) -> RiskResult:
     if features.has_db_migration:
         c = WEIGHTS["has_db_migration"]
         score += c
-        factors.append(RiskFactor(
-            "database_migration", c / 100, "Includes database schema migration", "static"
-        ))
+        factors.append(
+            RiskFactor(
+                "database_migration", c / 100, "Includes database schema migration", "static"
+            )
+        )
 
     if features.has_infra_change:
         c = WEIGHTS["has_infra_change"]
         score += c
-        factors.append(RiskFactor(
-            "infrastructure_change", c / 100, "Includes infrastructure changes", "static"
-        ))
+        factors.append(
+            RiskFactor(
+                "infrastructure_change", c / 100, "Includes infrastructure changes", "static"
+            )
+        )
 
     files = features.files_changed
     if files > 0:
         c = _normalize_tier(files, WEIGHTS["files_changed"], tiers=[5, 20])
         score += c
-        factors.append(RiskFactor(
-            "files_changed", c / 100, f"{files} files changed", "static"
-        ))
+        factors.append(RiskFactor("files_changed", c / 100, f"{files} files changed", "static"))
 
     lines = features.lines_added + features.lines_deleted
     if lines > 0:
         c = _normalize_tier(lines, WEIGHTS["lines_changed"], tiers=[100, 500])
         score += c
-        factors.append(RiskFactor(
-            "lines_changed", c / 100, f"{lines} total lines changed", "static"
-        ))
+        factors.append(
+            RiskFactor("lines_changed", c / 100, f"{lines} total lines changed", "static")
+        )
 
     # ── HISTORICAL FEATURES (Sprint 2) ──────────────────────────────────
 
@@ -192,32 +198,41 @@ def compute_enhanced_risk(features: RiskFeatures) -> RiskResult:
     if features.recent_failure_count > 0:
         c = min(WEIGHTS["recent_failures"], features.recent_failure_count * 5)
         score += c
-        factors.append(RiskFactor(
-            "recent_failures", c / 100,
-            f"{features.recent_failure_count} failures in the last 7 days",
-            "historical",
-        ))
+        factors.append(
+            RiskFactor(
+                "recent_failures",
+                c / 100,
+                f"{features.recent_failure_count} failures in the last 7 days",
+                "historical",
+            )
+        )
 
     # Deployment frequency: >3 deploys in 24h indicates churn
     if features.deployments_last_24h > 3:
         c = min(WEIGHTS["deployment_frequency"], (features.deployments_last_24h - 3) * 2)
         score += c
-        factors.append(RiskFactor(
-            "deployment_frequency", c / 100,
-            f"{features.deployments_last_24h} deployments in the last 24 hours",
-            "historical",
-        ))
+        factors.append(
+            RiskFactor(
+                "deployment_frequency",
+                c / 100,
+                f"{features.deployments_last_24h} deployments in the last 24 hours",
+                "historical",
+            )
+        )
 
     # Service instability: Low stability score = high risk
     if features.service_stability_score < 80:
         instability = 100 - features.service_stability_score
         c = min(WEIGHTS["service_instability"], instability * 0.15)
         score += c
-        factors.append(RiskFactor(
-            "service_instability", c / 100,
-            f"Service stability score: {features.service_stability_score}/100",
-            "historical",
-        ))
+        factors.append(
+            RiskFactor(
+                "service_instability",
+                c / 100,
+                f"Service stability score: {features.service_stability_score}/100",
+                "historical",
+            )
+        )
 
     # Metrics anomaly: Current error rate significantly above baseline
     if features.current_error_rate > 0 and features.baseline_error_rate > 0:
@@ -225,12 +240,15 @@ def compute_enhanced_risk(features: RiskFeatures) -> RiskResult:
         if ratio > 2.0:  # Error rate is 2x baseline
             c = min(WEIGHTS["metrics_anomaly"], (ratio - 1) * 4)
             score += c
-            factors.append(RiskFactor(
-                "error_rate_elevated", c / 100,
-                f"Error rate {ratio:.1f}x above baseline "
-                f"({features.current_error_rate:.4f} vs {features.baseline_error_rate:.4f})",
-                "historical",
-            ))
+            factors.append(
+                RiskFactor(
+                    "error_rate_elevated",
+                    c / 100,
+                    f"Error rate {ratio:.1f}x above baseline "
+                    f"({features.current_error_rate:.4f} vs {features.baseline_error_rate:.4f})",
+                    "historical",
+                )
+            )
 
     # ── CONTEXTUAL FEATURES (Sprint 2) ──────────────────────────────────
 
@@ -239,12 +257,15 @@ def compute_enhanced_risk(features: RiskFeatures) -> RiskResult:
         c = WEIGHTS["time_of_day"] * time_risk
         score += c
         day_names = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-        factors.append(RiskFactor(
-            "deployment_timing", c / 100,
-            f"Deploying at {features.deploy_hour_utc:02d}:00 UTC on "
-            f"{day_names[features.deploy_day_of_week]}",
-            "contextual",
-        ))
+        factors.append(
+            RiskFactor(
+                "deployment_timing",
+                c / 100,
+                f"Deploying at {features.deploy_hour_utc:02d}:00 UTC on "
+                f"{day_names[features.deploy_day_of_week]}",
+                "contextual",
+            )
+        )
 
     # ── FINAL SCORING ───────────────────────────────────────────────────
 
@@ -292,6 +313,7 @@ def compute_enhanced_risk(features: RiskFeatures) -> RiskResult:
 
 
 # ─── Helper Functions ────────────────────────────────────────────────────────
+
 
 def _normalize_tier(value: int, max_weight: float, tiers: list[int]) -> float:
     """
@@ -376,6 +398,7 @@ def _compute_time_risk(hour: int, day_of_week: int) -> float:
 # Keep the Sprint 1 API working. The original compute_risk_score function
 # is still called by the existing routes. It now delegates to the enhanced engine.
 
+
 def compute_risk_score(request) -> object:  # type: ignore[no-untyped-def]
     """
     Sprint 1 backward-compatible wrapper.
@@ -383,7 +406,8 @@ def compute_risk_score(request) -> object:  # type: ignore[no-untyped-def]
     Converts the Sprint 1 RiskEvaluationRequest into Sprint 2 RiskFeatures
     and calls the enhanced engine.
     """
-    from deploysense.api.schemas import RiskEvaluationResponse, RiskFactor as SchemaRiskFactor
+    from deploysense.api.schemas import RiskEvaluationResponse
+    from deploysense.api.schemas import RiskFactor as SchemaRiskFactor
 
     features = RiskFeatures(
         has_db_migration=request.has_db_migration,

@@ -13,8 +13,8 @@ from deploysense.ai.engine import (
     build_deployment_prompt,
 )
 
-
 # ─── Prompt Building ────────────────────────────────────────────────────────
+
 
 class TestPromptBuilding:
     """The prompt should include all deployment context."""
@@ -40,7 +40,11 @@ class TestPromptBuilding:
         context = {
             "service_name": "test",
             "factors": [
-                {"name": "database_migration", "contribution": 0.2, "description": "Includes DB migration"},
+                {
+                    "name": "database_migration",
+                    "contribution": 0.2,
+                    "description": "Includes DB migration",
+                },
             ],
         }
         prompt = build_deployment_prompt(context)
@@ -66,6 +70,7 @@ class TestPromptBuilding:
 
 # ─── Rule-Based Fallback ────────────────────────────────────────────────────
 
+
 class TestRuleBasedFallback:
     """When LLM is unavailable, the rule-based fallback should produce useful analysis."""
 
@@ -86,7 +91,6 @@ class TestRuleBasedFallback:
             latency=5.0,
         )
         assert "Critical-risk" in result.summary
-        assert result.risk_score is None or True  # It's in the explanation
 
     def test_migration_generates_recommendation(self):
         result = self._engine()._rule_based_analysis(
@@ -119,7 +123,11 @@ class TestRuleBasedFallback:
 
     def test_root_causes_from_factors(self):
         factors = [
-            {"name": "database_migration", "contribution": 0.2, "description": "Includes migration"},
+            {
+                "name": "database_migration",
+                "contribution": 0.2,
+                "description": "Includes migration",
+            },
             {"name": "files_changed", "contribution": 0.1, "description": "25 files changed"},
         ]
         result = self._engine()._rule_based_analysis(
@@ -138,8 +146,11 @@ class TestRuleBasedFallback:
     def test_elevated_error_rate_pattern(self):
         result = self._engine()._rule_based_analysis(
             {
-                "risk_score": 50, "risk_level": "MODERATE", "factors": [],
-                "current_error_rate": 0.05, "baseline_error_rate": 0.01,
+                "risk_score": 50,
+                "risk_level": "MODERATE",
+                "factors": [],
+                "current_error_rate": 0.05,
+                "baseline_error_rate": 0.01,
             },
             latency=5.0,
         )
@@ -147,6 +158,7 @@ class TestRuleBasedFallback:
 
 
 # ─── Analysis Result Structure ───────────────────────────────────────────────
+
 
 class TestAnalysisResultStructure:
     """Analysis results should have the correct structure."""
@@ -170,13 +182,20 @@ class TestAnalysisResultStructure:
 
     def test_confidence_range(self):
         analysis = DeploymentAnalysis(
-            summary="", risk_explanation="", root_causes=[], recommendations=[],
-            failure_patterns=[], confidence=0.7, model_used="test", latency_ms=1.0,
+            summary="",
+            risk_explanation="",
+            root_causes=[],
+            recommendations=[],
+            failure_patterns=[],
+            confidence=0.7,
+            model_used="test",
+            latency_ms=1.0,
         )
         assert 0.0 <= analysis.confidence <= 1.0
 
 
 # ─── Engine Fallback on Network Error ────────────────────────────────────────
+
 
 class TestEngineFallback:
     """When the LLM API is unreachable, the engine should fall back gracefully."""
@@ -184,11 +203,13 @@ class TestEngineFallback:
     @pytest.mark.asyncio
     async def test_fallback_on_connection_error(self):
         engine = AIEngine(api_base="http://localhost:1", api_key="fake", timeout=1.0)
-        result = await engine.analyze_deployment({
-            "service_name": "test",
-            "risk_score": 50,
-            "risk_level": "MODERATE",
-            "factors": [],
-        })
+        result = await engine.analyze_deployment(
+            {
+                "service_name": "test",
+                "risk_score": 50,
+                "risk_level": "MODERATE",
+                "factors": [],
+            }
+        )
         assert result.model_used == "rule-based-fallback"
         assert result.summary is not None

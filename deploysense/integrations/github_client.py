@@ -29,7 +29,6 @@ RATE LIMITING:
 import httpx
 from tenacity import retry, stop_after_attempt, wait_exponential
 
-from deploysense.core import get_settings
 from deploysense.logging import get_logger
 
 logger = get_logger(__name__)
@@ -47,7 +46,6 @@ class GitHubClient:
     """
 
     def __init__(self, token: str | None = None) -> None:
-        settings = get_settings()
         self._token = token
         self._headers = {
             "Accept": "application/vnd.github+json",

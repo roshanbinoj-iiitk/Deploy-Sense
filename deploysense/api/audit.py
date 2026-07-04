@@ -39,7 +39,7 @@ FUTURE:
 
 import uuid
 from collections.abc import Sequence
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -52,6 +52,7 @@ logger = get_logger(__name__)
 
 # ─── Audit Event Types ──────────────────────────────────────────────────────
 
+
 class AuditAction:
     """
     Constants for audit event types.
@@ -60,6 +61,7 @@ class AuditAction:
     An enum would require code changes for new event types.
     Constants are flexible while providing IDE autocomplete.
     """
+
     # Auth
     LOGIN = "auth.login"
     LOGOUT = "auth.logout"
@@ -95,6 +97,7 @@ class AuditAction:
 
 
 # ─── Audit Log Writer ───────────────────────────────────────────────────────
+
 
 async def record_audit(
     db: AsyncSession,
@@ -135,7 +138,7 @@ async def record_audit(
             resource_id=resource_id,
             details=details or {},
             ip_address=ip_address,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
         )
         db.add(entry)
 
@@ -151,6 +154,7 @@ async def record_audit(
 
 
 # ─── Audit Query ─────────────────────────────────────────────────────────────
+
 
 async def query_audit_logs(
     db: AsyncSession,
