@@ -28,6 +28,20 @@ async function get<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+async function post<T>(path: string, body: any): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+    cache: 'no-store',
+    signal: AbortSignal.timeout(5_000),
+  });
+  if (!res.ok) throw new Error(`API ${path} → ${res.status}`);
+  return res.json() as Promise<T>;
+}
+
 // ── Deployments ──────────────────────────────────────────────────────────────
 
 export async function getDeployments(
@@ -44,6 +58,16 @@ export async function getDeployments(
 
 export async function getDeployment(id: string): Promise<Deployment> {
   return get<Deployment>(`/api/v1/deployments/${id}`);
+}
+
+export async function createDeployment(payload: {
+  service_name: string;
+  environment: string;
+  version?: string;
+  git_sha: string;
+  deployed_by?: string;
+}): Promise<Deployment> {
+  return post<Deployment>('/api/v1/deployments', payload);
 }
 
 export async function getDeploymentStats(): Promise<DeploymentStats> {

@@ -5,6 +5,7 @@ import PageHeader from '@/components/ui/PageHeader';
 import Panel from '@/components/ui/Panel';
 import EmptyState from '@/components/ui/EmptyState';
 import Pagination from '@/components/ui/Pagination';
+import SimulateDeploymentModal from '@/components/ui/SimulateDeploymentModal';
 import { Rocket } from 'lucide-react';
 
 const STATUSES = ['STABLE','DEPLOYING','MONITORING','FAILED','ROLLED_BACK','PENDING','BLOCKED'];
@@ -46,10 +47,13 @@ export default async function DeploymentsPage({
   return (
     <div className="flex flex-col gap-8 p-8 animate-fadein">
       {/* Header */}
-      <PageHeader
-        title="Deployments"
-        subtitle={`${pagination.total} total — page ${page} of ${totalPages}`}
-      />
+      <div className="flex items-center justify-between">
+        <PageHeader
+          title="Deployments"
+          subtitle={`${pagination.total} total — page ${page} of ${totalPages}`}
+        />
+        <SimulateDeploymentModal />
+      </div>
 
       {/* Filter bar */}
       <div className="flex flex-wrap items-center gap-2">
