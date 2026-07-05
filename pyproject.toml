@@ -61,6 +61,7 @@ dev = [
     "factory-boy>=3.3.0",
     "ruff>=0.8.0",
     "mypy>=1.13.0",
+    "types-python-jose>=3.3.4",
     "pre-commit>=4.0.0",
     "bandit>=1.8.0",
 ]

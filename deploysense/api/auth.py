@@ -89,7 +89,7 @@ def create_access_token(user_id: str, github_username: str) -> str:
         "exp": now + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS),
         "iat": now,
     }
-    return jwt.encode(payload, settings.secret_key, algorithm=ALGORITHM)  # type: ignore[no-any-return]
+    return jwt.encode(payload, settings.secret_key, algorithm=ALGORITHM)
 
 
 def decode_access_token(token: str) -> dict[str, Any]:
@@ -102,7 +102,7 @@ def decode_access_token(token: str) -> dict[str, Any]:
       - JWTError: Invalid token structure
     """
     settings = get_settings()
-    return jwt.decode(token, settings.secret_key, algorithms=[ALGORITHM])  # type: ignore[no-any-return]
+    return jwt.decode(token, settings.secret_key, algorithms=[ALGORITHM])
 
 
 # ─── GitHub OAuth ────────────────────────────────────────────────────────────
