@@ -4,6 +4,9 @@ const nextConfig = {
   turbopack: {
     root: __dirname,
   },
+  experimental: {
+    optimizePackageImports: ['lucide-react'],
+  },
   // Proxy all /api calls to the FastAPI backend so no CORS issues in dev
   async rewrites() {
     return [
